@@ -68,7 +68,7 @@ findR <- function(bounds,
   # drop all outcomes that fall below cp.l at the interim. Futility stopping remains a possibility if all outcomes drop below cp.l.
   # Calculate CP:
   z.alpha <- bounds
-  cp.component1 <- sweep(ts.s1, 2, sqrt(information.j), "*") 
+  cp.component1 <- sweep(ts.s1, 2, sqrt(information.j), "*")
   cp.component23 <- -z.alpha*sqrt(information.final) + (information.final-information.j)*delta1. # Note: always delta1 here, whether typeIerror or power
   cp.numer <- sweep(cp.component1, 2, cp.component23, "+") # Add components 1 and 23 to create numerator
   cp.denom <- sqrt(information.final-information.j)
@@ -84,20 +84,20 @@ findR <- function(bounds,
   stop.any <- stop.futility | stop.efficacy
   continue <- !stop.any # Trials that carry on to full N.
   exceed.cpl <- !below.cp.bounds  # Binary: 1: CP>=CP_L
-  
-  
+
+
   ### minus.cp <- -cp
   ### greatest.cps <- t(apply(minus.cp, 1, function(x) rank(x) <= max.outs.s2.))
   ### retained.outcomes <- greatest.cps*exceed.cpl[continue] # should this subset be removed?
-  ### retain.continue <- retained.outcomes*continue 
-  ### retain.continue=1 : trial continues to stage 2 and outcome is retained. 
+  ### retain.continue <- retained.outcomes*continue
+  ### retain.continue=1 : trial continues to stage 2 and outcome is retained.
   ### retain.continue=0 : trial stopped at stage 1 or trial continues to stage 2 and outcome is dropped
   ### exceed.bounds <- t(t(ts.s2) > z.alpha)
   ### exceed.bounds.binary <- exceed.bounds*retain.continue # outcomes that exceed final boundary AND were retained AND only for trials that continued to stage 2.
   ### This seems fine, but I think there is still some amibguity regarding what is contributing to the type I error:
   ### If m=2, i.e. we reject H0 only if two outcomes exceed their boundary, then a single outcome exceeding its boundary is not a type I error,
   ### and so one could argue that such an instance should not be counted as contributing to that outcome's share of the type I error.
-  
+
   # The section above, using apply, is clearer but approx. half the speed of the conditional loop below:
   minus.cp <- -cp
   # j<-1
@@ -111,7 +111,7 @@ findR <- function(bounds,
   minus.cp.continue.subset <- minus.cp[continue,]
   ranked.rows <- t(apply(minus.cp.continue.subset, 1, rank))
   greatest.cps <- ranked.rows <= max.outs.s2.
-  
+
   retained.outcomes <- greatest.cps*exceed.cpl[continue,]
   n.obs.s2 <- sum(retained.outcomes)
   exceed.bounds.binary <- t(t(ts.s2[continue,]) > z.alpha)*retained.outcomes
@@ -121,7 +121,7 @@ findR <- function(bounds,
   PET <- sum(stop.any)/nsims.
 
   ENM.pp <- (K*nsims. + n.obs.s2)/nsims. # Expected no. observations is K*(no. times stop at S1) + sum of all observations in S2 ("n.obs.s2")
-  
+
   # drop: number of outcomes to drop (one approach. The other is to drop all outcomes below a certain CP (cp.l))
   # retain.binary <- t(apply(cp.rank, 1, function(x) x > drop)) # Assuming we drop a fixed number of outcomes, set as "drop".
   # if(drop.outcomes==TRUE){
@@ -133,8 +133,8 @@ findR <- function(bounds,
   #   }else{
   #     retained.outcomes <- matrix(TRUE, ncol=K., nrow=nsims.)
   #     }
-  # retain.continue <- retained.outcomes*continue 
-  # retain.continue=1 : trial continues to stage 2 and outcome is retained. 
+  # retain.continue <- retained.outcomes*continue
+  # retain.continue=1 : trial continues to stage 2 and outcome is retained.
   # retain.continue=0 : trial stopped at stage 1 or trial continues to stage 2 and outcome is dropped
   # exceed.bounds <- t(apply(ts.s2, 1, function(x) x>z.alpha)) # Too slow -- use line below:
   # exceed.bounds <- t(t(ts.s2) > z.alpha)
@@ -142,14 +142,14 @@ findR <- function(bounds,
   # This seems fine, but I think there is still some amibguity regarding what is contributing to the type I error:
   # If m=2, i.e. we reject H0 only if two outcomes exceed their boundary, then a single outcome exceeding its boundary is not a type I error,
   # and so one could argue that such an instance should not be counted as contributing to that outcome's share of the type I error.
-  
+
 #  reject.s1 <- sum(stop.efficacy)
 #  reject.s2 <- sum(rowSums(exceed.bounds.binary)>=m.)
 #  prob.reject <- (reject.s1+reject.s2)/nsims.
-  
+
   # Output:
   PET <- sum(stop.any)/nsims.
-  
+
   if(return.optimisation==TRUE){
     typeIerror.diff2 <- sum((alpha.k. - p.reject)^2)
     return(typeIerror.diff2)
@@ -181,17 +181,17 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                            fix.n=FALSE)
 {
   n.init <- ceiling(n.min+(n.max-n.min)/2)
-  
+
   K <- max.outcomes[1]
   max.outs.s2 <- max.outcomes[2]
   m <- max.outcomes[3]
-  
+
   recycleDeltas <- function(vec, working.outs., K.){
     full.delta.vec <- rep(vec[2], K.)
     full.delta.vec[working.outs.] <- vec[1]
     return(full.delta.vec)
   }
-  
+
   #### Warnings, checks ####
   if(is.null(delta0)){
     warning("No uninteresting treatment effects delta0 supplied. Using delta0=-1000, for all outcomes.", call. = FALSE)
@@ -200,7 +200,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
   if(is.null(rho.vec)){
     warning("No correlations supplied. Using rho=0.1 for all correlations.", call. = FALSE)
     rho.vec <- rep(0.1, times=sum(1:(K-1)))
-  } 
+  }
   if(is.null(vars) | length(vars)==1){
     warning("Either zero or one outcome variance supplied. Using var=1 for all outcomes.", call. = FALSE)
     vars <- rep(1, K)
@@ -227,7 +227,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
   if(alpha.combine==TRUE & length(alpha.k)>1){
     stop("When alpha.combine is set to TRUE, a single overall alpha.k is required, not a vector.", call=F)
   }
-  
+
   if(reuse.deltas==TRUE){
       # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
       # !!! They are used to obtain the power, which is found given outcome effects equal to  delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
@@ -237,12 +237,12 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
       if(length(delta1)==1){
         delta1 <- rep(delta1, 2)
       }
-      return.delta0 <- delta0 
+      return.delta0 <- delta0
       return.delta1 <- delta1
       rm(delta0, delta1)
       delta0 <- rep(return.delta0[2], K)
       delta1 <- rep(return.delta1[2], K)
-      delta0[working.outs] <- return.delta0[1] 
+      delta0[working.outs] <- return.delta0[1]
       delta1[working.outs] <- return.delta1[1]
       if(K>2){
         warning("reuse.deltas set to TRUE: As K>2, will take delta1[1] as anticipated effect size for outcomes 1 to m, and \n delta0[2] as anticipated effect size for outcomes m+1 to K")
@@ -253,21 +253,20 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
         warning("reuse.deltas set to TRUE: As K>2, will take delta.true[1] as true delta for all working outcomes (i.e. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (i.e. m+1 to K.")
       }
     }
-  }  
+  }
   if(length(vars)!=K | length(delta0)!=K | length(delta1)!=K){
     stop("The arguments vars, delta0 and delta1 must all have length equal to the number of outcomes, max.outcomes[1]", call.=FALSE)
   }
-  
 
-  library(minqa)
+
   J <- 2
   cov.mat <- createCovMat(J.=J, K.=K, rho.vec.=rho.vec)
   #set.seed(seed)
   ts.global.null <- mvtnorm::rmvnorm(nsims, mean=rep(0, J*K), sigma = cov.mat)
   # Find optimal final bounds for an initial n under the global null, using drop the loser design, and find the type I error at these bounds:
 
-#### Find optimal DtL design ##### 
-#  (i.e. find final boundary and sample size that gives correct type I error and power) 
+#### Find optimal DtL design #####
+#  (i.e. find final boundary and sample size that gives correct type I error and power)
 # Use the bisection method to find the n that gives the appropriate power (using drop the loser design):
   n.all <- n.min:n.max
   a <- 1
@@ -279,10 +278,10 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                   lower=0.01,
                   upper=10,
                   typeI.power="typeI",
-                  ts=ts.global.null, 
+                  ts=ts.global.null,
                   n.stage=n.all[d],
                   return.optimisation=TRUE,
-                  nsims.=nsims,  
+                  nsims.=nsims,
                   K.=K,
                   m.=m,
                   max.outs.s2.=max.outs.s2,
@@ -329,10 +328,10 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                                lower=0.01,
                                upper=10,
                                typeI.power="typeI",
-                               ts=ts.global.null, 
+                               ts=ts.global.null,
                                n.stage=final.n.stage,
                                return.optimisation=TRUE,
-                               nsims.=nsims,  
+                               nsims.=nsims,
                                K.=K,
                                m.=m,
                                max.outs.s2.=max.outs.s2,
@@ -377,11 +376,11 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                       cp.u.=cp.u)
   ess.h0.dtl <- t1.final.n$pet*final.n.stage + (1-t1.final.n$pet)*2*final.n.stage
   ess.h1.dtl <- final.pwr$pet*final.n.stage + (1-final.pwr$pet)*2*final.n.stage
-  
-  
-  
-  
-  
+
+
+
+
+
 
   p.reject.single.stage <- function(bounds,
                                     ts,
@@ -392,7 +391,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
     ts.single.stage <- ts[,(K.+1):(2*K.)]
     rejections <- rowSums(ts.single.stage > bounds) >= m.
     t1.err <- sum(rejections)/nrow(ts)
-    #t1.err.single.stage <-  sum(ts.single.stage[,1] > bounds)/nrow(ts) # first outcome only. 
+    #t1.err.single.stage <-  sum(ts.single.stage[,1] > bounds)/nrow(ts) # first outcome only.
     # When first outcome only, boundary is ~1.645. Power unchanged.
     if(opt==TRUE){
       alpha.diff <- (t1.err-alpha)^2
@@ -401,8 +400,8 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
       return(t1.err)
     }
   }
-  
-  
+
+
   #####  Find optimal single-stage design #####
   # (i.e. find boundary and sample size that gives correct type I error and power
   r.k.single.stage <- bobyqa(par=2,
@@ -413,7 +412,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                              alpha=alpha.k,
                              m.=m,
                              K.=K,
-                             opt=TRUE)$par 
+                             opt=TRUE)$par
   t1.err.single.stage <- p.reject.single.stage(bounds=r.k.single.stage,
                                                ts=ts.global.null,
                                                alpha=alpha.k,
@@ -435,13 +434,13 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
     ts.power.single.stage <- sweep(ts.global.null[, (K+1):(2*K)], 2, tau, "+")
     reject.outcome.binary <- ts.power.single.stage > r.k.single.stage
     current.power.single.stage <- sum(rowSums(reject.outcome.binary)>=m)/nsims
-    i <- i + 1 
+    i <- i + 1
   }
   power.single.stage <- current.power.single.stage
   n.single.stage <- n.all.single.stage[i-1]
   ess.h0.single.stage <- n.single.stage
   ess.h1.single.stage <- n.single.stage
-  
+
 
 #### Fix power etc. for N: ####
 if(fix.n==TRUE){
@@ -454,12 +453,12 @@ if(fix.n==TRUE){
     t1.dtl.max.n <- t1.final.n$prob.reject
     ess.h0.dtl.max.n <- ess.h0.dtl
     ess.h1.dtl.max.n <- ess.h1.dtl
-    
-    n.single.stage.max.n <- n.single.stage 
-    power.single.stage.max.n <- power.single.stage 
+
+    n.single.stage.max.n <- n.single.stage
+    power.single.stage.max.n <- power.single.stage
     t1.err.single.stage.max.n <- t1.err.single.stage
     ess.h0.single.stage.max.n <- ess.h0.single.stage
-    ess.h1.single.stage.max.n <- ess.h1.single.stage 
+    ess.h1.single.stage.max.n <- ess.h1.single.stage
   }
   if(N.dtl > n.single.stage){
     # If sample size for single stage design is lower:
@@ -468,7 +467,7 @@ if(fix.n==TRUE){
     t1.dtl.max.n <- t1.final.n$prob.reject
     ess.h0.dtl.max.n <- ess.h0.dtl
     ess.h1.dtl.max.n <- ess.h1.dtl
-    
+
     n.single.stage.max.n <- N.dtl
     t1.err.single.stage.max.n <- t1.err.single.stage # type I error doesn't change for single-stage when n changes.
     # Recalculate power and ESS for single stage design:
@@ -500,7 +499,7 @@ if(fix.n==TRUE){
                                  alpha.k.=alpha.k,
                                  cp.l.=cp.l,
                                  cp.u.=cp.u)
-    
+
     t1.pet.dtl.max.n <- findR(bounds=final.r.k,
                               typeI.power="typeI",
                               ts=ts.global.null,
@@ -520,14 +519,14 @@ if(fix.n==TRUE){
     t1.dtl.max.n <- t1.pet.dtl.max.n$prob.reject
     ess.h0.dtl.max.n <- t1.pet.dtl.max.n$pet*final.n.stage.max.n + (1-t1.pet.dtl.max.n$pet)*2*final.n.stage.max.n
     ess.h1.dtl.max.n <- power.pet.dtl.max.n$pet*final.n.stage.max.n + (1-power.pet.dtl.max.n$pet)*2*final.n.stage.max.n
-    
-    n.single.stage.max.n <- n.single.stage 
-    power.single.stage.max.n <- power.single.stage 
+
+    n.single.stage.max.n <- n.single.stage
+    power.single.stage.max.n <- power.single.stage
     t1.err.single.stage.max.n <- t1.err.single.stage
     ess.h0.single.stage.max.n <- ess.h0.single.stage
-    ess.h1.single.stage.max.n <- ess.h1.single.stage 
+    ess.h1.single.stage.max.n <- ess.h1.single.stage
   }
-  
+
   N.max.n <- c(J*final.n.stage.max.n, n.single.stage.max.n)
   ess0.max.n <- c(ess.h0.dtl.max.n, ess.h0.single.stage.max.n)
   ess1.max.n <- c(ess.h1.dtl.max.n, ess.h1.single.stage.max.n)
@@ -588,7 +587,7 @@ if(!is.null(delta.true)){
   output.true.ratios <- data.frame(dtl.true$prob.reject, power.true.single.stage, delta.true, means.true, ratios)
   names(output.true.ratios) <- c("p.reject.dtl", "p.reject.ss", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""), "ess.ratio", "enm.ratio")
 }
-  
+
 #### output  ####
   # Collate results for output:
   #typeIerr.k.c <- rbind(typeIerr.k, t1.err.single.stage)
@@ -602,13 +601,13 @@ if(!is.null(delta.true)){
   enm.pp.h1 <- c(final.pwr$enm.pp, K)
   enm.tot.h0 <- enm.pp.h0*c(final.n.stage, n.single.stage) # Total ENM is (ENM per person)*(n per stage) for DtL, and K*N for single stage.
   enm.tot.h1 <- enm.pp.h1*c(final.n.stage, n.single.stage)
-  
+
   #colnames(final.bounds) <- paste("r.k", 1:K, sep="") # Only needed when bounds differ
   final.n.vec <- c(final.n.stage, NA)
   final.N.vec <- c(J*final.n.stage, n.single.stage)
-  
+
   design <- c("Drop the loser", "Single stage")
-  
+
 #  browser()
   design.results <- cbind(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c, N.max.n, ess0.max.n, ess1.max.n, power.max.n, t1.max.n)
   colnames(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power", "N.max.n", "ESS0.max.n", "ESS1.max.n", "power.max.n", "typeIerr.max.n")
@@ -617,7 +616,7 @@ if(!is.null(delta.true)){
   design.results$design <- design
   # Shared results:
   if(reuse.deltas==TRUE){
-    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1]) 
+    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
     colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
   }else{
     des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
@@ -633,7 +632,7 @@ if(!is.null(delta.true)){
                  results=design.results)
                  #paths=rbind(final.pwr$paths, pwr.nodrop.output$paths)
                  #cp=pwr.output$cp
-  if(!is.null(delta.true)){  
+  if(!is.null(delta.true)){
     output$true.results=output.true
     output$true.ratios=output.true.ratios
     }
@@ -703,7 +702,6 @@ plotESS <- function(tidied.output, param, xaxis){
 }
 
 plotESSENM <-  function(tidied.output, param, xaxis){
-  library(gridExtra)
   param <- ensym(param)
   plot.ess <- ggplot(data=tidied.output$input,  mapping=aes(x=!!param, y=ess1.ratio, col=km, linetype=max.s2.prop))+
     geom_line(size=1)+
@@ -715,7 +713,7 @@ plotESSENM <-  function(tidied.output, param, xaxis){
          y=expression(paste("(", ESS[DtL],"/", ESS[single], ")",  " | LFC")),
          x=xaxis)+
   theme(legend.position = "none")
-  
+
  plot.enm <- ggplot(data=tidied.output$input,  mapping=aes(x=!!param, y=enm1.ratio, col=km, linetype=max.s2.prop))+
    geom_line(size=1)+
    geom_hline(yintercept=1,
@@ -743,7 +741,7 @@ plotTrueENMdtl <- function(raw.output){
          x=expression(paste(mu[1]))
     )+
     geom_text(aes(label = round(enm, 2)), size=5) +
-    scale_fill_gradient(low = "white", high = "darkred") 
+    scale_fill_gradient(low = "white", high = "darkred")
 }
 
 
@@ -766,7 +764,6 @@ plotTrueENMratio <- function(raw.output){
 
 
 plotTrueESSratio <- function(raw.output, method){
-  library(ggplot2)
   plot1 <- ggplot(raw.output$true.ratios, aes(x=mu.1, y=mu.2))+
     geom_raster(aes(fill = ess.ratio))+
     scale_x_continuous(breaks=sort(unique(raw.output$true.ratios$mu.1)))+
@@ -803,8 +800,6 @@ plotTrueESSENMratios <- function(raw.out, cols=1){
 
 
 plotTruePreject <- function(raw.output, method){
-  library(ggplot2)
-  library(gridExtra)
   if(method=="mo"){
     new.approach.df <- raw.output$true.results[raw.output$true.results$design=="MO", ]
     old.approach.df <- raw.output$true.results[raw.output$true.results$design=="Composite", ]
@@ -823,8 +818,8 @@ plotTruePreject <- function(raw.output, method){
     geom_text(aes(label = round(prob.reject, 2)), size=5) +
     scale_fill_gradient(low = "white", high = "grey40")+
     coord_cartesian(expand = 0) +
-    theme(legend.position = "none") 
-  
+    theme(legend.position = "none")
+
   plot2 <- ggplot(old.approach.df, aes(x=mu.1, y=mu.2))+
     geom_raster(aes(fill = prob.reject))+
     scale_x_continuous(breaks=sort(unique(old.approach.df$mu.1)))+
@@ -834,7 +829,7 @@ plotTruePreject <- function(raw.output, method){
          x=expression(paste(mu[1])))+
     geom_text(aes(label = round(prob.reject, 2)), size=5) +
     scale_fill_gradient(low = "white", high = "grey40") +
-    coord_cartesian(expand = 0) 
+    coord_cartesian(expand = 0)
   if(method=="mo"){
     plot1 <- plot1 +
       # labs(title=expression(paste(P, "(reject ", H[0], ")", [MO], ", powered for ")),

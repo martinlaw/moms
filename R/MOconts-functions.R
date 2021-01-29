@@ -21,7 +21,6 @@
                       return.ts=FALSE
                       )
   {
-    #require(minqa)
     recycleDeltas <- function(vec, working.outs., K.){
       full.delta.vec <- rep(vec[2], K.)
       full.delta.vec[working.outs.] <- vec[1]
@@ -114,7 +113,6 @@
     #                         alpha=alpha,
     #                         composite=FALSE
     # ){
-    #   library(Rfast)
     #   if(J==1){
     #     e.vec <- const*((1:J)/J)^(wang.delta-0.5)
     #     f.vec <- e.vec
@@ -194,7 +192,6 @@
                                    alpha=alpha,
                                    composite=FALSE
     ){
-      library(Rfast)
       e.vec <-  const*((1:J)/J)^(wang.delta-0.5)
       f.vec <- -e.vec
       f.vec[length(f.vec)] <- e.vec[length(e.vec)]
@@ -836,8 +833,6 @@
     # plot.df is the result of wrapOutput(combine=TRUE)
     # input.df is the result of wrapOutput(combine=FALSE)$input
     # varying.param is the parameter that was varied in the results
-    library(ggplot2)
-    library(gridExtra)
     # For title: show all parameters:
     non.varying.params <- setdiff(names(input.df), varying.param)
     #   browser()
@@ -877,7 +872,6 @@
 
 
   plot.moms <- function(output){
-    library(ggplot2)
     J <- output$chars$J
     K <- ifelse(test=output$composite=="Yes", yes=1, no=output$chars$K)
     lower <- NULL
@@ -910,8 +904,6 @@
   }
 
   plot.true <- function(output){
-    library(ggplot2)
-    library(gridExtra)
     K <- output$chars$K
     expd.trt.effects <- paste(output$means.power[1:K], collapse = ", ")
     plot.df <- data.frame(rbind(output$true.oc, output$true.oc.c))
@@ -939,8 +931,6 @@
 
 
   plotTrue <- function(true.out, fixn){
-    library(ggplot2)
-    library(gridExtra)
     # Argument fixn must equal "both", "No" or "Yes".
     # Plot p(reject) as true values of delta vary:
     anticipated.delta0 <- true.out$input$delta0.2
@@ -1055,7 +1045,6 @@
   }
   # Plot the output of varyDelta:
   plotVaryDelta <- function(output){
-    library(ggthemes)
     p6 <- ggplot(data=output, mapping = aes(x=delta0, y=delta1))+
       geom_tile(aes(fill = pwr.diff)) +
       scale_fill_gradient2(midpoint=0, low = 'darkred', mid="white", high = 'darkblue',
@@ -1099,7 +1088,6 @@
 
   #### Plots for changing true effects ####
   plotTrueESSratio <- function(raw.output, method){
-    library(ggplot2)
    plot1 <- ggplot(raw.output$true.ratios, aes(x=mu.1, y=mu.2))+
      geom_raster(aes(fill = ess.ratio))+
      scale_x_continuous(breaks=sort(unique(raw.output$true.ratios$mu.1)))+
@@ -1124,8 +1112,6 @@
 
 
   plotTruePrejectOLD <- function(raw.output, method){
-    library(ggplot2)
-    library(gridExtra)
     if(method=="mo"){
       new.approach.df <- raw.output$true.results[raw.output$true.results$design=="MO" & raw.output$true.results$fixed.n=="No", ]
       old.approach.df <- raw.output$true.results[raw.output$true.results$design=="Composite" & raw.output$true.results$fixed.n=="No", ]
@@ -1180,8 +1166,6 @@
 
 
   plotTruePreject <- function(raw.output, method){
-    library(ggplot2)
-    library(gridExtra)
     if(method=="mo"){
       new.approach.df <- raw.output$true.results[raw.output$true.results$design=="MO" & raw.output$true.results$fixed.n=="No", ]
       old.approach.df <- raw.output$true.results[raw.output$true.results$design=="Composite" & raw.output$true.results$fixed.n=="No", ]
@@ -1291,7 +1275,6 @@ createWangBounds <- function(C=2, J=4, delta=0, ymin=-5, ymax=5){
 
 
 plotBounds <- function(line.df=NULL, bounds.df, xlabel="Stage", ylabel="Test Statistic", title.main=NULL){
-  library(ggplot2)
   bounds.plot <- ggplot()+
     geom_blank()+
     geom_polygon(data=bounds.df,
@@ -1356,7 +1339,6 @@ createRejectionCoords <- function(C, xymax.prop=1.1){
 
 plotRejectionCoords <- function(rejection.list){
   # rejection.list should be a list object returned by the function createRejectionCoords()
-  library(ggplot2)
   theme_set(theme_bw(base_size = 11)) # Increase font size and set theme for plots.
   p <- ggplot()+
     geom_hline(yintercept = rejection.list$C[1], linetype=2)+
