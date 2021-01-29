@@ -1,0 +1,16 @@
+Package: moms
+Title: Creates Multi-Outcome Multi-Stage Trials With General Number of Efficacious Outcomes
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Martin",
+           family = "Law",
+           role = c("aut", "cre"),
+           email = "martin.law@mrc-bsu.cam.ac.uk",
+           comment = c(ORCID = "0000-0001-9594-348X"))
+Description: The moms package finds multi-outcome multi-stage trial designs that define trial success as observing promising effects on a specified number of outcomes. This number of outcomes is specified in advance by the user.
+License: `use_mit_license()`
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+
