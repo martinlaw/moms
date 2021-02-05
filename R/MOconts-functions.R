@@ -1,3 +1,11 @@
+#' Find Multi-Outcome Multi-Stage Trials That Allow a General Number of Efficacious Outcomes
+#'
+#' This function allows users to find a single-arm multi-outcome multi-stage trial that
+#' allows ending for trial success if promising effects are observed on a general number
+#' of outcomes, specified by the user.
+#' @import ggplot2
+#' @import gridExtra
+#' @export
   findDes <- function(K=default.K,
                       m=default.m,
                       J=default.J,
