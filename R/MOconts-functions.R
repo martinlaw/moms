@@ -5,6 +5,8 @@
 #' of outcomes, specified by the user.
 #' @import ggplot2
 #' @import gridExtra
+#' @import minqa
+#' @import Rfast
 #' @export
   findDes <- function(K=default.K,
                       m=default.m,
@@ -110,83 +112,6 @@
     if(length(delta1)!=K) stop ("Number of supplied treatment effects, i.e. delta1, should be equal to K, the number of outcomes", call. = FALSE)
     if(length(vars)!=K) stop ("Number of outcome variances, i.e. vars, should be equal to K (the number of outcomes)", call. = FALSE)
   #### P(rejection) ####
-    # pRejectFast <- function(const,
-    #                         J=J,
-    #                         K=K,
-    #                         m=m,
-    #                         wang.delta,
-    #                         ts,
-    #                         nsims,
-    #                         prob.only=TRUE,
-    #                         alpha=alpha,
-    #                         composite=FALSE
-    # ){
-    #   if(J==1){
-    #     e.vec <- const*((1:J)/J)^(wang.delta-0.5)
-    #     f.vec <- e.vec
-    #     if(composite==FALSE) {
-    #       go.overall <- colSums(t(ts) > e.vec)>=m
-    #     } else{
-    #       go.overall <- ts > e.vec
-    #     }
-    #     prob.reject <- sum(go.overall)/nsims
-    #     minimise.prob <- abs(prob.reject - alpha)
-    #     expd.no.stages <- 1
-    #   } else {
-    #     if(composite==FALSE){
-    #       e.vec.each.outcome <- vector("list", length=K)
-    #       f.vec.each.outcome <- vector("list", length=K)
-    #       for (i in 1:K) {
-    #         e.vec.each.outcome[[i]] <- const[i]*((1:J)/J)^(wang.delta-0.5)
-    #         f.vec.each.outcome[[i]] <- c(-const[i]*((1:(J-1))/J)^(wang.delta-0.5), e.vec.each.outcome[[i]][length(e.vec.each.outcome[[i]])])
-    #       }
-    #       # Interleave these, creating boundaries j1k1, j1k2, j2k1, j2k2:
-    #       e.vec <- c(do.call(rbind, e.vec.each.outcome))
-    #       f.vec <- c(do.call(rbind, f.vec.each.outcome))
-    #       nogo.overall <- vector("list", J)
-    #       go.overall <- vector("list", J)
-    #       for(j in 1:J){
-    #         # Subset to the K outcomes for stage j:
-    #         nogo.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) < f.vec[(1+(j-1)*K):(j*K)])>=(K-m+1)
-    #         go.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) > e.vec[(1+(j-1)*K):(j*K)])>=m
-    #       }
-    #       # Are m or more boundaries crossed? Row=simulation, col=stage
-    #       nogo.trial.binary <- t(do.call(rbind, nogo.overall))
-    #       go.trial.binary <- t(do.call(rbind, go.overall))
-    #     } else{ # if composite==TRUE
-    #       # Only J boundaries for composite:
-    #       e.vec <- const*((1:J)/J)^(wang.delta-0.5)
-    #       f.vec <- c(-const*((1:(J-1))/J)^(wang.delta-0.5), e.vec[length(e.vec)])
-    #       nogo.trial.binary <-  t(t(ts) < f.vec)
-    #       go.trial.binary <- t(t(ts) > e.vec)
-    #     }
-    #     # The first stage at which a nogo decision is made (and analogous for go):
-    #     # Add extra column of 1's so that there is always some maximum even if NOGO boundary is never crossed:
-    #     nogo.trial.binary.plus <- cbind(nogo.trial.binary, 1)
-    #     # Add extra column of 1's so that there is always some maximum even if GO boundary is never crossed:
-    #     go.trial.binary.plus <- cbind(go.trial.binary, 1)
-    #     first.nogo.stage <- rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
-    #     first.go.stage <- rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
-    #     first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
-    #     mode(first.stop.stage) <- "numeric"
-    #     # Does the trial make a nogo or a go decision first?
-    #     # Final decision: 1=nogo, 2=go
-    #     final.decision <- rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
-    #     prob.reject <- sum(final.decision==2)/nsims
-    #     stop.stage <- rowMins(first.stop.stage, value=TRUE) #Rfast
-    #     expd.no.stages <- sum(stop.stage)/nsims
-    #     minimise.prob <- abs(prob.reject - alpha)^2 # 29th Jul: added square.
-    #   } # end of if J==1 else
-    #   if(prob.only==TRUE){
-    #     return(minimise.prob)
-    #   } else{
-    #     return(list(prob.reject=prob.reject,
-    #                 expd.no.stages=expd.no.stages,
-    #                 f.vec=f.vec,
-    #                 e.vec=e.vec)
-    #     )
-    #   }
-    # } # end of function
 
     ##### new pRejectFast, with shared constant C:
     pRejectFastCommonC <- function(const,
@@ -240,16 +165,16 @@
         nogo.trial.binary.plus <- cbind(nogo.trial.binary, 1)
         # Add extra column of 1's so that there is always some maximum even if GO boundary is never crossed:
         go.trial.binary.plus <- cbind(go.trial.binary, 1)
-        first.nogo.stage <- rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
-        first.go.stage <- rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
+        first.nogo.stage <- Rfast::rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
+        first.go.stage <- Rfast::rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
         first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
         mode(first.stop.stage) <- "numeric"
         # Does the trial make a nogo or a go decision first?
         # Final decision: 1=nogo, 2=go
-        final.decision <- rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
+        final.decision <- Rfast::rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
         prob.reject <- sum(final.decision==2)/nsims
         minimise.prob <- abs(prob.reject - alpha)^2 # 29th Jul: added square.
-        stop.stage <- rowMins(first.stop.stage, value=TRUE) #Rfast
+        stop.stage <- Rfast::rowMins(first.stop.stage, value=TRUE) #Rfast
         expd.no.stages <- sum(stop.stage)/nsims
       } # end of if J==1 else
       if(prob.only==TRUE){
@@ -413,7 +338,7 @@
   # NOTE: In composite function, we use method="Brent", which allows limits and one-dimensional optimisation.
     #browser()
     # No longer using bobyqa because optimisation is now 1-D.
-    final.const <- bobyqa(par=1,
+    final.const <- minqa::bobyqa(par=1,
                         fn = pRejectFastCommonC,
                         lower=0.01,
                         upper=30,
@@ -453,7 +378,7 @@
 
   # Now optimise and find type I error for composite outcome.
   # NOTE: Here, using Brent to optimise, because R recommends this or optimize() when optimisation is in one dimension.
-    final.const.composite <- bobyqa(par=1,
+    final.const.composite <- minqa::bobyqa(par=1,
                                    fn=pRejectFastCommonC,
                                    lower=0.01,
                                    upper=30,
@@ -850,7 +775,7 @@
     #print(plot.title)
     #browser()
     pow <- if(fix.n){plot.df$power.fix.n} else {no=plot.df$power}
-    p0 <- ggplot(data=plot.df, mapping = aes(x=plot.df[, varying.param], y=pow)) +
+    p0 <- ggplot2::ggplot(data=plot.df, mapping = aes(x=plot.df[, varying.param], y=pow)) +
       # geom_hline(yintercept = plot.df$req.power[1], linetype=2)+
       geom_line(aes(col=design), size=1.2)+
       geom_point(aes(col=design), size=2)+
@@ -866,7 +791,7 @@
     #print(plot.title)
     #browser()
     pow <- if(fix.n){plot.df$power.fix.n} else {no=plot.df$power}
-    p0 <- ggplot(data=plot.df, mapping = aes(x=plot.df[, varying.param], y=pow)) +
+    p0 <- ggplot2::ggplot(data=plot.df, mapping = aes(x=plot.df[, varying.param], y=pow)) +
       # geom_hline(yintercept = plot.df$req.power[1], linetype=2)+
       geom_line(aes(col=design), size=1.2)+
       geom_point(aes(col=design), size=2)+
@@ -894,7 +819,7 @@
                           outcome=rep(1:K, each=2*J)
     )
     details.df <- plot.df[!is.infinite(plot.df$lower),]
-    p <- ggplot() +
+    p <- ggplot2::ggplot() +
       geom_polygon(data=plot.df, mapping=aes(x=x, y=lower), fill = "red", alpha=0.3)+
       geom_polygon(data=plot.df, mapping=aes(x=x, y=upper), fill = "lightgreen", alpha=0.5)+
       geom_line(data=details.df, mapping=aes(x=x, y=lower), size=0.5)+
@@ -918,7 +843,7 @@
     plot.df$trt.eff <- rep(output$means.true[,K], times=2)
     plot.df$design <- c(rep("multi", nrow(output$means.true)), rep("composite", nrow(output$means.true)))
 
-    p1 <- ggplot(data=plot.df, mapping = aes(x=trt.eff, y=prob.reject)) +
+    p1 <- ggplot2::ggplot(data=plot.df, mapping = aes(x=trt.eff, y=prob.reject)) +
       geom_hline(yintercept = output$chars$power, linetype=2)+
       geom_vline(xintercept = output$means.power[K], linetype=2)+
       geom_line(aes(col=design), size=2)+
@@ -927,12 +852,12 @@
                        round(output$chars$typeIerr,4),"   ","Power (multi): ", round(output$chars$pwr,4),
                        "\n  Powered for treatment effects (", expd.trt.effects, ")", sep=""))
 
-    p2 <-  ggplot(data=plot.df, mapping = aes(x=trt.eff, y=ess))+
+    p2 <-  ggplot2::ggplot(data=plot.df, mapping = aes(x=trt.eff, y=ess))+
       geom_vline(xintercept = output$means.power[K], linetype=2)+
       geom_line(aes(col=design), size=2)+
       labs(x="True treatment effect of 'non-effective' treatment", y = 'ESS' ) +
       labs(title=paste("Max N (multi): ", output$chars$max.ss, "   " ,"Max N (composite): ", output$chars$max.ss.c))
-    #plots <- grid.arrange(p1, p2)
+    #plots <- gridExtra::grid.arrange(p1, p2)
     #plots
     return(list(p1, p2))
   }
@@ -952,7 +877,7 @@
     # browser()
     if(fixn=="both"){
       plotting.df <- true.out$true.results[true.out$true.results$mu.working==anticipated.delta1, ]
-      p.preject <- ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=prob.reject)) +
+      p.preject <- ggplot2::ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=prob.reject)) +
         geom_line(aes(col=design, linetype=fixed.n), alpha=0.3, size=2)+
         scale_linetype_manual(values=c("dashed", "dotted"))+
         geom_point(aes(col=design, shape=fixed.n), size=2)+
@@ -962,7 +887,7 @@
         labs(x="True effect of 'non-effective' outcome", y = 'P(reject null)' )+
         labs(title=title.overall)+
         theme_grey(base_size=22)
-      p.ess <- ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=ess)) +
+      p.ess <- ggplot2::ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=ess)) +
         geom_line(aes(col=design, linetype=fixed.n), alpha=0.3, size=2)+
         scale_linetype_manual(values=c("dashed", "dotted"))+
         geom_point(aes(col=design, shape=fixed.n), size=2)+
@@ -974,20 +899,20 @@
       plotting.df <- true.out$true.results[true.out$true.results$mu.working==anticipated.delta1 & true.out$true.results$fixed.n==fixn, ]
       title.overall <- paste("m/K: ", m, "/", K, ".  J: ", J,
                              ".\n Powered for treatment effects (", powered.for, ")", sep="", collapse=", ")
-      p.preject <- ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=prob.reject)) +
+      p.preject <- ggplot2::ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=prob.reject)) +
         geom_line(aes(col=design), alpha=1, size=2)+
         geom_hline(yintercept = 0.8, linetype=2)+
         geom_vline(xintercept = true.out$input$delta0.2, linetype=2)+
         labs(x="True effect of 'non-effective' outcome", y = 'P(reject null)' )+
         labs(title=title.overall)+
         theme_grey(base_size=22)
-      p.ess <- ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=ess)) +
+      p.ess <- ggplot2::ggplot(data=plotting.df, mapping = aes(x=mu.nonworking, y=ess)) +
         geom_line(aes(col=design), alpha=1, size=2)+
         geom_vline(xintercept = true.out$input$delta0.2, linetype=2)+
         labs(x="True effect of 'non-effective' outcome", y = 'ESS' )+
         theme_grey(base_size=22)
     }
-    grid.arrange(p.preject, p.ess)
+    gridExtra::grid.arrange(p.preject, p.ess)
   }
 
   ####### Show how designs change as all delta0 and delta1 are varied #####
@@ -1053,7 +978,7 @@
   }
   # Plot the output of varyDelta:
   plotVaryDelta <- function(output){
-    p6 <- ggplot(data=output, mapping = aes(x=delta0, y=delta1))+
+    p6 <- ggplot2::ggplot(data=output, mapping = aes(x=delta0, y=delta1))+
       geom_tile(aes(fill = pwr.diff)) +
       scale_fill_gradient2(midpoint=0, low = 'darkred', mid="white", high = 'darkblue',
                            breaks=seq(from=-1, to=1, by=0.5),
@@ -1073,11 +998,11 @@
     param <- ensym(param)
     if(method=="mo")  {
       yaxis.text <- expression(paste("(", ESS[MO],"/", ESS[comp], ")",  " | LFC"))
-      pl <- ggplot(data=tidied.output$input,  mapping=aes(x=!!param, y=ess1.ratio, col=km))
+      pl <- ggplot2::ggplot(data=tidied.output$input,  mapping=aes(x=!!param, y=ess1.ratio, col=km))
     }
     if(method=="dtl")  {
       yaxis.text <- expression(paste("(", ESS[DtL],"/", ESS[single], ")",  " | LFC"))
-      pl <- ggplot(data=tidied.output$input,  mapping=aes(x=!!param, y=ess1.ratio, col=km, linetype=max.s2.prop))+
+      pl <- ggplot2::ggplot(data=tidied.output$input,  mapping=aes(x=!!param, y=ess1.ratio, col=km, linetype=max.s2.prop))+
         labs(linetype="Kmax")
     }
     pl <- pl+
@@ -1096,7 +1021,7 @@
 
   #### Plots for changing true effects ####
   plotTrueESSratio <- function(raw.output, method){
-   plot1 <- ggplot(raw.output$true.ratios, aes(x=mu.1, y=mu.2))+
+   plot1 <- ggplot2::ggplot(raw.output$true.ratios, aes(x=mu.1, y=mu.2))+
      geom_raster(aes(fill = ess.ratio))+
      scale_x_continuous(breaks=sort(unique(raw.output$true.ratios$mu.1)))+
      scale_y_continuous(breaks=sort(unique(raw.output$true.ratios$mu.2)))+
@@ -1128,7 +1053,7 @@
       new.approach.df <- raw.output$true.results[raw.output$true.results$design=="DtL" & raw.output$true.results$fixed.n=="No", ]
       old.approach.df <- raw.output$true.results[raw.output$true.results$design=="Single stage" & raw.output$true.results$fixed.n=="No", ]
     }
-    plot1 <- ggplot(new.approach.df, aes(x=mu.1, y=mu.2))+
+    plot1 <- ggplot2::ggplot(new.approach.df, aes(x=mu.1, y=mu.2))+
       geom_raster(aes(fill = prob.reject))+
       scale_x_continuous(breaks=sort(unique(new.approach.df$mu.1)))+
       scale_y_continuous(breaks=sort(unique(new.approach.df$mu.2)))+
@@ -1138,7 +1063,7 @@
       geom_text(aes(label = round(prob.reject, 2)), size=5) +
       scale_fill_gradient(low = "white", high = "darkred")
 
-    plot2 <- ggplot(old.approach.df, aes(x=mu.1, y=mu.2))+
+    plot2 <- ggplot2::ggplot(old.approach.df, aes(x=mu.1, y=mu.2))+
       geom_raster(aes(fill = prob.reject))+
       scale_x_continuous(breaks=sort(unique(old.approach.df$mu.1)))+
       scale_y_continuous(breaks=sort(unique(old.approach.df$mu.2)))+
@@ -1168,7 +1093,7 @@
         labs(title=expression(paste("R(", H[0], ")"[single], " powered for")),
              fill=expression(paste("R(", H[0], ")")))
     }
-    both.plots <- grid.arrange(plot1, plot2, ncol=1)
+    both.plots <- gridExtra::grid.arrange(plot1, plot2, ncol=1)
     both.plots
   }
 
@@ -1182,7 +1107,7 @@
       new.approach.df <- raw.output$true.results[raw.output$true.results$design=="DtL" & raw.output$true.results$fixed.n=="No", ]
       old.approach.df <- raw.output$true.results[raw.output$true.results$design=="Single stage" & raw.output$true.results$fixed.n=="No", ]
     }
-    plot1 <- ggplot(new.approach.df, aes(x=mu.1, y=mu.2))+
+    plot1 <- ggplot2::ggplot(new.approach.df, aes(x=mu.1, y=mu.2))+
       geom_raster(aes(fill = prob.reject))+
       scale_x_continuous(breaks=sort(unique(new.approach.df$mu.1)))+
       scale_y_continuous(breaks=sort(unique(new.approach.df$mu.2)))+
@@ -1193,7 +1118,7 @@
       coord_cartesian(expand = 0) +
       theme(legend.position = "none")
 
-    plot2 <- ggplot(old.approach.df, aes(x=mu.1, y=mu.2))+
+    plot2 <- ggplot2::ggplot(old.approach.df, aes(x=mu.1, y=mu.2))+
       geom_raster(aes(fill = prob.reject))+
       scale_x_continuous(breaks=sort(unique(old.approach.df$mu.1)))+
       scale_y_continuous(breaks=sort(unique(old.approach.df$mu.2)))+
@@ -1225,7 +1150,7 @@
     }
     #browser()
     #leg <- get_legend(plot1)
-    both.plots <- grid.arrange(plot1, plot2, widths=c(2.4,3))
+    both.plots <- gridExtra::grid.arrange(plot1, plot2, widths=c(2.4,3))
     both.plots
   }
 ########### Create subset of true results  #########
@@ -1245,14 +1170,7 @@
   }
 
 
-findWangTsiatisBounds <- function(C., J., delta.){
-  j <- 1:J.
-  upper <- C.*(j^(delta.-0.5))
-  lower <- -upper
-  lower[J.] <- upper[J.]
-  bounds <- data.frame(lower=lower, upper=upper)
-  bounds
-}
+
 
 #### Plot diagrams: ####
 makeOutcomeCoords <- function(...){
@@ -1268,29 +1186,79 @@ makeOutcomeCoords <- function(...){
   line.df
 }
 
-createWangBounds <- function(C=2, J=4, delta=0, ymin=-5, ymax=5){
-  wang <- findWangTsiatisBounds(C. = C, J. = J, delta. = delta)
+#' Finds Wang & Tsiatis Stopping Boundaries
+#'
+#' This function finds stopping boundaries using the formula of Wang & Tsiatis
+#' @param C Constant
+#' @param delta Parameter determining shape of stopping regions.
+#' @param J Number of stages
+#' @export
+#' @return Returns a data frame of J rows and two columns, representing the lower and upper stopping boundaries for each of the J stages.
+#'
+findWangTsiatisBounds <- function(C, delta, J){
+    j <- 1:J
+    upper <- C*(j^(delta-0.5))
+    lower <- -upper
+    lower[J] <- upper[J]
+    bounds <- data.frame(lower=lower, upper=upper)
+    bounds
+  }
+
+createWTplottingBounds <- function(C, J, delta, ymin, ymax){
+  wang <- findWangTsiatisBounds(C=C, J=J, delta=delta)
   x <- c(1:J, J:1, 1:J, J:1)
   y.lower <- c(wang$lower, rep(ymin, J))
   y.upper <- c(wang$upper, rep(ymax, J))
   y <- c(y.lower, y.upper)
   label <- rep(c("lower", "upper"), each=2*J)
-  output.df <- data.frame(x.coords=x,
+  polygon.df <- data.frame(x.coords=x,
                           y.coords=y,
                           label=label)
-  output.df
+  bounds.only.y <- unlist(wang)
+  bounds.only.x <- rep(1:J, times=2)
+  bounds.labels <- as.character(round(bounds.only.y,2))
+  bounds.df <- data.frame(x.coords=bounds.only.x,
+                          y.coords=bounds.only.y,
+                          labels.rounded=bounds.labels,
+                          stringsAsFactors = FALSE)
+  output.lists <- list(polygon.df=polygon.df,
+                       bounds.df=bounds.df)
+  output.lists
 }
 
-
-plotBounds <- function(line.df=NULL, bounds.df, xlabel="Stage", ylabel="Test Statistic", title.main=NULL){
-  bounds.plot <- ggplot()+
+#' Plots Stopping regions and Shows Stopping Boundaries
+#'
+#' This function plots the upper and lower stopping regions and labels the stopping boundaries,
+#' for a design realisation found using the function findDes.
+#'
+#' @param find.des.output The output from a call to findDes.
+#' @export
+#'
+plotBounds <- function(find.des.output,
+                       xlabel="Stage",
+                       ylabel="Test Statistic",
+                       title.main=NULL,
+                       line.df=NULL,
+                       ymin=-5,
+                       ymax=5){
+  WT.plotting.bounds <- createWTplottingBounds(C=find.des.output$results$C,
+                                               J=find.des.output$input$J,
+                                               delta=find.des.output$input$WangDelta,
+                                               ymin=ymin,
+                                               ymax=ymax)
+  bounds.plot <- ggplot2::ggplot()+
     geom_blank()+
-    geom_polygon(data=bounds.df,
+    geom_polygon(data=WT.plotting.bounds$polygon.df,
                  mapping=aes(x=x.coords, y=y.coords, fill=label),
                  alpha=0.2)+
+    geom_point(data=WT.plotting.bounds$bounds.df,
+               mapping = aes(x=x.coords, y=y.coords))+
+    geom_text(data=WT.plotting.bounds$bounds.df, aes(x=x.coords, y=y.coords, label=labels.rounded),
+              hjust=1.25,
+              vjust=1.25)+
     ylab(ylabel)+
     scale_x_continuous(name=xlabel,
-                       breaks=sort(unique(bounds.df$x.coords)),
+                       breaks=sort(unique(WT.plotting.bounds$polygon.df$x.coords)),
                        labels=waiver())+
     guides(fill=FALSE)
   if(!is.null(line.df)){
@@ -1348,7 +1316,7 @@ createRejectionCoords <- function(C, xymax.prop=1.1){
 plotRejectionCoords <- function(rejection.list){
   # rejection.list should be a list object returned by the function createRejectionCoords()
   theme_set(theme_bw(base_size = 11)) # Increase font size and set theme for plots.
-  p <- ggplot()+
+  p <- ggplot2::ggplot()+
     geom_hline(yintercept = rejection.list$C[1], linetype=2)+
     geom_vline(xintercept = rejection.list$C[1], linetype=2)+
     geom_path(data=rejection.list$comp.line.df, aes(x=x, y=y), linetype="dashed")+
@@ -1370,7 +1338,7 @@ plotRejectionCoords <- function(rejection.list){
 
 # Not an original fn:
 get_legend<-function(myggplot){
-  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  tmp <- ggplot2::ggplot_gtable(ggplot2::ggplot_build(myggplot))
   leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
   legend <- tmp$grobs[[leg]]
   return(legend)
