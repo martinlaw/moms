@@ -120,7 +120,7 @@ findR <- function(bounds,
   p.reject <- (reject.s1+reject.s2)/nsims.
   PET <- sum(stop.any)/nsims.
 
-  ENM.pp <- (K*nsims. + n.obs.s2)/nsims. # Expected no. observations is K*(no. times stop at S1) + sum of all observations in S2 ("n.obs.s2")
+  ENM.pp <- (K.*nsims. + n.obs.s2)/nsims. # Expected no. observations is K*(no. times stop at S1) + sum of all observations in S2 ("n.obs.s2")
 
   # drop: number of outcomes to drop (one approach. The other is to drop all outcomes below a certain CP (cp.l))
   # retain.binary <- t(apply(cp.rank, 1, function(x) x > drop)) # Assuming we drop a fixed number of outcomes, set as "drop".
@@ -162,7 +162,7 @@ findR <- function(bounds,
 
 
 
-findCPloserDes <- function(nsims=default.nsims.dtl,
+findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
                            max.outcomes=default.max.outcomes.dtl,
                            vars=default.vars.dtl,
                            delta0=default.delta0.dtl,
@@ -640,6 +640,312 @@ if(!is.null(delta.true)){
 }
 
 
+recycleDeltas <- function(vec, working.outs., K.){
+  full.delta.vec <- rep(vec[2], K.)
+  full.delta.vec[working.outs.] <- vec[1]
+  return(full.delta.vec)
+}
+
+
+p.reject.single.stage <- function(bounds,
+                                  ts,
+                                  alpha,
+                                  m.,
+                                  K.,
+                                  opt){
+  ts.single.stage <- ts[,(K.+1):(2*K.)]
+  rejections <- rowSums(ts.single.stage > bounds) >= m.
+  t1.err <- sum(rejections)/nrow(ts)
+  #t1.err.single.stage <-  sum(ts.single.stage[,1] > bounds)/nrow(ts) # first outcome only.
+  # When first outcome only, boundary is ~1.645. Power unchanged.
+  if(opt==TRUE){
+    alpha.diff <- (t1.err-alpha)^2
+    return(alpha.diff)
+  }else{
+    return(t1.err)
+  }
+}
+
+findCPloserDes <- function(nsims=default.nsims.dtl,
+                           max.outcomes=default.max.outcomes.dtl,
+                           vars=default.vars.dtl,
+                           delta0=default.delta0.dtl,
+                           delta1=default.delta1.dtl,
+                           delta.true=NULL,
+                           reuse.deltas=TRUE,
+                           alpha.k=default.alpha.dtl,
+                           alpha.combine=TRUE,
+                           cp.l=default.cp.l.dtl,
+                           cp.u=default.cp.u.dtl,
+                           n.min=default.nmin.dtl,
+                           n.max=default.nmax.dtl,
+                           power=default.power.dtl,
+                           rho.vec=default.cor.dtl,
+                           working.outs=NULL,
+                           fix.n=FALSE)
+{
+  n.init <- ceiling(n.min+(n.max-n.min)/2)
+
+  K <- max.outcomes[1]
+  max.outs.s2 <- max.outcomes[2]
+  m <- max.outcomes[3]
+
+  #### Warnings, checks ####
+  if(is.null(delta0)){
+    warning("No uninteresting treatment effects delta0 supplied. Using delta0=-1000, for all outcomes.", call. = FALSE)
+    delta0 <- rep(-1000, K)
+  }
+  if(is.null(rho.vec)){
+    warning("No correlations supplied. Using rho=0.1 for all correlations.", call. = FALSE)
+    rho.vec <- rep(0.1, times=sum(1:(K-1)))
+  }
+  if(is.null(vars) | length(vars)==1){
+    warning("Either zero or one outcome variance supplied. Using var=1 for all outcomes.", call. = FALSE)
+    vars <- rep(1, K)
+  }
+  if(is.null(working.outs)){
+    warning("Indices of working outcomes not supplied. Taking indices of working outcomes as outcomes 1 to m.", call. = FALSE)
+    working.outs <- 1:m
+  }
+  if(is.null(max.outs.s2)){
+    warning("Maxmimum number of outcomes allowed in stage 2 not supplied. Using the number of outcomes required to show promise, m")
+    max.outs.s2 <- m
+  }
+  if(max.outs.s2 < m){
+    stop("Maxmimum number of outcomes allowed in stage 2, max.outcomes[2], must be greater than or equal to the number of outcomes required to show promise, m", call=F)
+  }
+  if(length(rho.vec)!=1 & length(rho.vec)!=sum(1:(K-1))){
+    stop("The number of correlation terms must be equal to 1 (in which case it is equal across all pairs of outcomes) or equal to the number of pairs of outcomes",
+         call.=FALSE)
+  }
+  if(length(rho.vec)==1 & K>2){
+    warning("Single value supplied for correlation rho.vec. Using supplied value for all correlations", call=F)
+    rho.vec <- rep(rho.vec, sum(1:(K-1)))
+  }
+  if(alpha.combine==TRUE & length(alpha.k)>1){
+    stop("When alpha.combine is set to TRUE, a single overall alpha.k is required, not a vector.", call=F)
+  }
+
+  if(reuse.deltas==TRUE){
+    # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
+    # !!! They are used to obtain the power, which is found given outcome effects equal to  delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
+    if(length(delta0)==1){
+      delta0 <- rep(delta0, 2)
+    }
+    if(length(delta1)==1){
+      delta1 <- rep(delta1, 2)
+    }
+    return.delta0 <- delta0
+    return.delta1 <- delta1
+    rm(delta0, delta1)
+    delta0 <- rep(return.delta0[2], K)
+    delta1 <- rep(return.delta1[2], K)
+    delta0[working.outs] <- return.delta0[1]
+    delta1[working.outs] <- return.delta1[1]
+    if(K>2){
+      warning("reuse.deltas set to TRUE: As K>2, will take delta1[1] as anticipated effect size for outcomes 1 to m, and \n delta0[2] as anticipated effect size for outcomes m+1 to K")
+    }
+    if(!is.null(delta.true)){
+      means.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
+      if(K>2){
+        warning("reuse.deltas set to TRUE: As K>2, will take delta.true[1] as true delta for all working outcomes (i.e. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (i.e. m+1 to K.")
+      }
+    }
+  }
+  if(length(vars)!=K | length(delta0)!=K | length(delta1)!=K){
+    stop("The arguments vars, delta0 and delta1 must all have length equal to the number of outcomes, max.outcomes[1]", call.=FALSE)
+  }
+
+
+  J <- 2
+  cov.mat <- createCovMat(J.=J, K.=K, rho.vec.=rho.vec)
+  #set.seed(seed)
+  ts.global.null <- mvtnorm::rmvnorm(nsims, mean=rep(0, J*K), sigma = cov.mat)
+  # Find optimal final bounds for an initial n under the global null, using drop the loser design, and find the type I error at these bounds:
+
+  #### Find optimal DtL design #####
+  #  (i.e. find final boundary and sample size that gives correct type I error and power)
+  # Use the bisection method to find the n that gives the appropriate power (using drop the loser design):
+  n.all <- n.min:n.max
+  a <- 1
+  b <- length(n.all)
+  d <- which(n.all==n.init)
+  while(b-a>1){
+    r.k <- bobyqa(par=c(2),
+                  fn = findR,
+                  lower=0.01,
+                  upper=10,
+                  typeI.power="typeI",
+                  ts=ts.global.null,
+                  n.stage=n.all[d],
+                  return.optimisation=TRUE,
+                  nsims.=nsims,
+                  K.=K,
+                  m.=m,
+                  max.outs.s2.=max.outs.s2,
+                  working.outs.=working.outs,
+                  vars.=vars,
+                  delta0.=delta0,
+                  delta1.=delta1,
+                  alpha.k.=alpha.k,
+                  cp.l.=cp.l,
+                  cp.u.=cp.u
+                  # always.drop.=always.drop
+    )$par
+
+    pwr.output <- findR(bounds=r.k,
+                        typeI.power="power",
+                        ts=ts.global.null,
+                        n.stage=n.all[d],
+                        nsims.=nsims,
+                        K.=K,
+                        m.=m,
+                        max.outs.s2.=max.outs.s2,
+                        working.outs.=working.outs,
+                        vars.=vars,
+                        delta0.=delta0,
+                        delta1.=delta1,
+                        alpha.k.=alpha.k,
+                        cp.l.=cp.l,
+                        cp.u.=cp.u
+                        # always.drop.=always.drop
+    )
+    print(paste("Power is ", format(pwr.output$prob.reject, digits=4), " when n per stage is ", n.all[d]), q=F)
+    if(pwr.output$prob.reject < power){
+      a <- d
+      d <- ceiling(a+(b-a)/2)
+    } else {
+      b <- d
+      d <- ceiling(a+(b-a)/2)
+    }
+  } # end of while
+  final.n.stage <- n.all[d]
+  print(paste("Final n per stage: ", final.n.stage), q=F)
+  final.r.k <- bobyqa(par=c(2),
+                      fn = findR,
+                      lower=0.01,
+                      upper=10,
+                      typeI.power="typeI",
+                      ts=ts.global.null,
+                      n.stage=final.n.stage,
+                      return.optimisation=TRUE,
+                      nsims.=nsims,
+                      K.=K,
+                      m.=m,
+                      max.outs.s2.=max.outs.s2,
+                      working.outs.=working.outs,
+                      vars.=vars,
+                      delta0.=delta0,
+                      delta1.=delta1,
+                      alpha.k.=alpha.k,
+                      cp.l.=cp.l,
+                      cp.u.=cp.u
+                      # always.drop.=always.drop
+  )$par
+  final.pwr <- findR(bounds=final.r.k,
+                     typeI.power="power",
+                     ts=ts.global.null,
+                     n.stage=final.n.stage,
+                     nsims.=nsims,
+                     K.=K,
+                     m.=m,
+                     max.outs.s2.=max.outs.s2,
+                     working.outs.=working.outs,
+                     vars.=vars,
+                     delta0.=delta0,
+                     delta1.=delta1,
+                     alpha.k.=alpha.k,
+                     cp.l.=cp.l,
+                     cp.u.=cp.u)
+  t1.final.n <- findR(bounds=final.r.k,
+                      typeI.power="typeI",
+                      ts=ts.global.null,
+                      n.stage=final.n.stage,
+                      nsims.=nsims,
+                      K.=K,
+                      m.=m,
+                      max.outs.s2.=max.outs.s2,
+                      working.outs.=working.outs,
+                      vars.=vars,
+                      delta0.=delta0,
+                      delta1.=delta1,
+                      alpha.k.=alpha.k,
+                      cp.l.=cp.l,
+                      cp.u.=cp.u)
+  ess.h0.dtl <- t1.final.n$pet*final.n.stage + (1-t1.final.n$pet)*2*final.n.stage
+  ess.h1.dtl <- final.pwr$pet*final.n.stage + (1-final.pwr$pet)*2*final.n.stage
+
+  # Find sample size with correct power:
+  denom <-  vars
+  lfc.effects <- delta0
+  lfc.effects[working.outs] <- delta1[working.outs]
+
+  #### True delta ####
+  if(!is.null(delta.true)){
+    nrows <- nrow(means.true)
+    true.results.list <- vector("list", nrows)
+    for(i in 1:nrows){
+      true.results.list[[i]] <- unlist(findR(bounds=final.r.k,
+                                             typeI.power="truedelta",
+                                             ts=ts.global.null,
+                                             n.stage=final.n.stage,
+                                             nsims.=nsims,
+                                             K.=K,
+                                             m.=m,
+                                             max.outs.s2.=max.outs.s2,
+                                             working.outs.=working.outs,
+                                             vars.=vars,
+                                             delta1.=delta1,
+                                             delta.true.=means.true[i,],
+                                             alpha.k.=alpha.k,
+                                             cp.l.=cp.l,
+                                             cp.u.=cp.u))
+      tau.true.current <- means.true[i, ] * sqrt(information.final)
+      ts.true.current <-  sweep(ts.global.null[, (K+1):(2*K)], 2, tau.true.current, "+")
+    }
+    true.results.mat <- do.call(rbind, true.results.list)
+    dtl.true <- data.frame(true.results.mat, delta.true, means.true)
+    dtl.true$ess <- final.n.stage*dtl.true$pet + J*final.n.stage*(1-dtl.true$pet)
+    dtl.true$enm.total <- dtl.true$enm.pp * final.n.stage
+    output.true <- dtl.true
+    colnames(output.true) <- c("prob.reject", "pet", "enm.pp", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""), "ess", "enm")
+  }
+
+  #### output  ####
+  # Collate results for output:
+  typeIerr.total.c <- sum(t1.final.n$prob.reject)
+  power.c <- final.pwr$prob.reject
+  final.bounds <- final.r.k
+  ess.h0 <- ess.h0.dtl
+  ess.h1 <- ess.h1.dtl
+  enm.pp.h0 <- t1.final.n$enm.pp
+  enm.pp.h1 <- final.pwr$enm.pp
+  enm.tot.h0 <- enm.pp.h0*final.n.stage # Total ENM is (ENM per person)*(n per stage) for DtL.
+  enm.tot.h1 <- enm.pp.h1*final.n.stage
+
+  #colnames(final.bounds) <- paste("r.k", 1:K, sep="") # Only needed when bounds differ
+  final.n.vec <- final.n.stage
+  final.N.vec <- J*final.n.stage
+  design.results <- data.frame(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c)
+  names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power")
+  # Shared results:
+  if(reuse.deltas==TRUE){
+    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
+    colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
+  }else{
+    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
+    colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor")
+  }
+  output <- list(input=des.chars,
+                 results=design.results)
+  #paths=rbind(final.pwr$paths, pwr.nodrop.output$paths)
+  #cp=pwr.output$cp
+  if(!is.null(delta.true)){
+    output$true.results=output.true
+  }
+  return(output)
+}
+
 
 
 # Function to tidy up list of outputs from main function :
@@ -869,24 +1175,42 @@ createSubset <- function(raw.output, delta.matrix){
 
 
 # Find interim stopping boundaries ####
-findZ <- function(cp,
-                  j=1,
-                  J=2,
+findDTLbounds <- function(cp.l,
+                  cp.u,
                   n.stage,
                   vars,
                   z.alpha,
                   d.1){
-  numer <- 1*n.stage
+  j <- 1
+  J <- 2
+  numer <- j*n.stage
   denom <-  vars
   information.j <- numer/denom
   numer.J <- J*n.stage
   information.final <- numer.J/denom
-  Z <- (sqrt(information.final-information.j)*qnorm(cp) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
-  Z
+  f <- (sqrt(information.final-information.j)*qnorm(cp.l) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
+  e <- (sqrt(information.final-information.j)*qnorm(cp.u) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
+  return(list(f=f, e=e))
 }
 
-findZ(cp=0.1,
-      n.stage = 10,
-      vars=1,
-      z.alpha = 2,
-      d.1=0.4)
+findDTLbounds(cp.l=0.1,
+              cp.u=0.95,
+              n.stage=10,
+              vars=c(1,2),
+              z.alpha = 2,
+              d.1=0.4)
+
+stopDecision <- function(){
+  z.alpha <- bounds
+  cp.component1 <- sweep(ts.s1, 2, sqrt(information.j), "*")
+  cp.component23 <- -z.alpha*sqrt(information.final) + (information.final-information.j)*delta1. # Note: always delta1 here, whether typeIerror or power
+  cp.numer <- sweep(cp.component1, 2, cp.component23, "+") # Add components 1 and 23 to create numerator
+  cp.denom <- sqrt(information.final-information.j)
+  cp <- pnorm(sweep(cp.numer, 2, cp.denom, "/"))
+  #stop.futility <- apply(cp, 1, function(x) all(x<cp.l.)) # Too slow. Use line below
+  below.cp.bounds <- cp<cp.l.
+  stop.futility <- rowSums(below.cp.bounds)>=(K.-m.+1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
+  #stop.efficacy <- rep(FALSE, nsims.) # If no efficacy stopping permitted.
+  #stop.efficacy <- apply(cp, 1, function(x) any(x>cp.u)) # only correct if m==1.
+  stop.efficacy <- rowSums(cp>=cp.u.)>=m.
+}
