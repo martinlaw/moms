@@ -186,13 +186,13 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
   max.outs.s2 <- max.outcomes[2]
   m <- max.outcomes[3]
 
-  recycleDeltas <- function(vec, working.outs., K.){
-    full.delta.vec <- rep(vec[2], K.)
-    full.delta.vec[working.outs.] <- vec[1]
-    return(full.delta.vec)
-  }
+  # recycleDeltas <- function(vec, working.outs., K.){
+  #   full.delta.vec <- rep(vec[2], K.)
+  #   full.delta.vec[working.outs.] <- vec[1]
+  #   return(full.delta.vec)
+  # }
 
-  #### Warnings, checks ####
+  #### Warnings, checks
   if(is.null(delta0)){
     warning("No uninteresting treatment effects delta0 supplied. Using delta0=-1000, for all outcomes.", call. = FALSE)
     delta0 <- rep(-1000, K)
@@ -265,7 +265,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
   ts.global.null <- mvtnorm::rmvnorm(nsims, mean=rep(0, J*K), sigma = cov.mat)
   # Find optimal final bounds for an initial n under the global null, using drop the loser design, and find the type I error at these bounds:
 
-#### Find optimal DtL design #####
+#### Find optimal DtL design
 #  (i.e. find final boundary and sample size that gives correct type I error and power)
 # Use the bisection method to find the n that gives the appropriate power (using drop the loser design):
   n.all <- n.min:n.max
@@ -382,27 +382,27 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
 
 
 
-  p.reject.single.stage <- function(bounds,
-                                    ts,
-                                    alpha,
-                                    m.,
-                                    K.,
-                                    opt){
-    ts.single.stage <- ts[,(K.+1):(2*K.)]
-    rejections <- rowSums(ts.single.stage > bounds) >= m.
-    t1.err <- sum(rejections)/nrow(ts)
-    #t1.err.single.stage <-  sum(ts.single.stage[,1] > bounds)/nrow(ts) # first outcome only.
-    # When first outcome only, boundary is ~1.645. Power unchanged.
-    if(opt==TRUE){
-      alpha.diff <- (t1.err-alpha)^2
-      return(alpha.diff)
-    }else{
-      return(t1.err)
-    }
-  }
+  # p.reject.single.stage <- function(bounds,
+  #                                   ts,
+  #                                   alpha,
+  #                                   m.,
+  #                                   K.,
+  #                                   opt){
+  #   ts.single.stage <- ts[,(K.+1):(2*K.)]
+  #   rejections <- rowSums(ts.single.stage > bounds) >= m.
+  #   t1.err <- sum(rejections)/nrow(ts)
+  #   ####t1.err.single.stage <-  sum(ts.single.stage[,1] > bounds)/nrow(ts) # first outcome only.
+  #   #### When first outcome only, boundary is ~1.645. Power unchanged.
+  #   if(opt==TRUE){
+  #     alpha.diff <- (t1.err-alpha)^2
+  #     return(alpha.diff)
+  #   }else{
+  #     return(t1.err)
+  #   }
+  # }
 
 
-  #####  Find optimal single-stage design #####
+  #####  Find optimal single-stage design
   # (i.e. find boundary and sample size that gives correct type I error and power
   r.k.single.stage <- bobyqa(par=2,
                              fn=p.reject.single.stage,
@@ -442,7 +442,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
   ess.h1.single.stage <- n.single.stage
 
 
-#### Fix power etc. for N: ####
+#### Fix power etc. for N:
 if(fix.n==TRUE){
   # Increase sample size for design with the lower sample size of the two designs and calculate the power:
   N.dtl <- J*final.n.stage
@@ -540,7 +540,7 @@ if(fix.n==TRUE){
   power.max.n <- rep(NA, 2)
   t1.max.n <- rep(NA, 2)
 }
-#### True delta ####
+#### True delta:
 if(!is.null(delta.true)){
   nrows <- nrow(means.true)
   true.results.list <- vector("list", nrows)
@@ -588,7 +588,7 @@ if(!is.null(delta.true)){
   names(output.true.ratios) <- c("p.reject.dtl", "p.reject.ss", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""), "ess.ratio", "enm.ratio")
 }
 
-#### output  ####
+#### output:
   # Collate results for output:
   #typeIerr.k.c <- rbind(typeIerr.k, t1.err.single.stage)
   #colnames(typeIerr.k.c) <- paste("typeIerr.k", 1:length(alpha.k), sep="")
@@ -911,6 +911,13 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
     colnames(output.true) <- c("prob.reject", "pet", "enm.pp", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""), "ess", "enm")
   }
 
+  # Obtain interim bounds:
+  interim.bounds <- findDTLbounds(cp.l=cp.l,
+                                  cp.u=cp.u,
+                                  n.stage=final.n.stage,
+                                  vars=vars,
+                                  z.alpha=final.r.k,
+                                  d.1=delta1)
   #### output  ####
   # Collate results for output:
   typeIerr.total.c <- sum(t1.final.n$prob.reject)
@@ -926,8 +933,8 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
   #colnames(final.bounds) <- paste("r.k", 1:K, sep="") # Only needed when bounds differ
   final.n.vec <- final.n.stage
   final.N.vec <- J*final.n.stage
-  design.results <- data.frame(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c)
-  names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power")
+  design.results <- data.frame(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c, t(interim.bounds))
+  names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power", paste("f.", 1:K, sep=""), paste("e.", 1:K, sep=""))
   # Shared results:
   if(reuse.deltas==TRUE){
     des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
@@ -1181,6 +1188,9 @@ findDTLbounds <- function(cp.l,
                   vars,
                   z.alpha,
                   d.1){
+  if(length(vars)!=length(d.1)){
+    stop("When calling findDTLbounds to find interim boundaries, the number of variance terms (vars) was not equal to the number of delta1 terms (d.1)")
+  }
   j <- 1
   J <- 2
   numer <- j*n.stage
@@ -1190,15 +1200,10 @@ findDTLbounds <- function(cp.l,
   information.final <- numer.J/denom
   f <- (sqrt(information.final-information.j)*qnorm(cp.l) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
   e <- (sqrt(information.final-information.j)*qnorm(cp.u) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
-  return(list(f=f, e=e))
+  return(c(f, e))
 }
 
-findDTLbounds(cp.l=0.1,
-              cp.u=0.95,
-              n.stage=10,
-              vars=c(1,2),
-              z.alpha = 2,
-              d.1=0.4)
+
 
 stopDecision <- function(){
   z.alpha <- bounds
