@@ -1,14 +1,6 @@
-#' Find Multi-Outcome Multi-Stage Trials That Allow a General Number of Efficacious Outcomes
-#'
-#' This function allows users to find a single-arm multi-outcome multi-stage trial that
-#' allows ending for trial success if promising effects are observed on a general number
-#' of outcomes, specified by the user.
-#' @import ggplot2
-#' @import gridExtra
-#' @import minqa
-#' @import Rfast
-#' @export
-  findDes <- function(K=default.K,
+# Original code used to find results in manuscript.  Only difference compared
+# to findDesis that this function also obtains composite results are obtained.
+  findDesSubmission <- function(K=default.K,
                       m=default.m,
                       J=default.J,
                       rho.vec=default.cor,
@@ -734,6 +726,517 @@
   #### End of main function ####
 
 
+  #' Find Multi-Outcome Multi-Stage Trials That Allow a General Number of Efficacious Outcomes
+  #'
+  #' This function allows users to find a single-arm multi-outcome multi-stage trial that
+  #' allows ending for trial success if promising effects are observed on a general number
+  #' of outcomes, specified by the user.
+  #' @import ggplot2
+  #' @import gridExtra
+  #' @import minqa
+  #' @import Rfast
+  #' @export
+  findDes <- function(K=default.K,
+                      m=default.m,
+                      J=default.J,
+                      rho.vec=default.cor,
+                      nsims=default.nsims,
+                      wang.delta=0,
+                      alpha=default.alpha,
+                      power=default.power,
+                      delta0=default.delta0,
+                      delta1=default.delta1,
+                      reuse.deltas=TRUE,
+                      delta.true=NULL,
+                      reuse.true.deltas=TRUE,
+                      vars.true=NULL,
+                      vars=NULL,
+                      working.outs=NULL,
+                      maxn.stage=200,
+                      return.boundaries=FALSE,
+                      return.ts=FALSE
+  )
+  {
+    recycleDeltas <- function(vec, working.outs., K.){
+      full.delta.vec <- rep(vec[2], K.)
+      full.delta.vec[working.outs.] <- vec[1]
+      return(full.delta.vec)
+    }
+    #### Warnings, checks: ####
+    if(is.null(delta0)){
+      warning("No uninteresting treatment effects delta0 supplied. Using delta0=0, for all outcomes.", call. = FALSE)
+      delta0 <- rep(0, K)
+    }
+    if(is.null(rho.vec)){
+      warning("No correlations supplied. Using rho=0.5 for all correlations.", call. = FALSE)
+      rho.vec <- rep(0.5, times=sum(1:(K-1)))
+    }
+    if(length(rho.vec)==1 & K>2){
+      warning("Single value supplied for correlations supplied. Using this value for all correlations.", call. = FALSE)
+      rho.vec <- rep(rho.vec, times=sum(1:(K-1)))
+    }
+    if(is.null(vars)){
+      warning("No outcome variances supplied. Using vars=1 for all outcomes.", call. = FALSE)
+      vars <- rep(1, K)
+    }
+    if(is.null(vars.true) & !is.null(delta.true)){
+      warning("No TRUE outcome variances supplied. Using anticipated vars as true vars (default is 1).", call. = FALSE)
+      vars.true <- vars
+    }
+    if(is.null(working.outs)){
+      warning("Indices of working treatments not supplied. Taking indices of working treatments as treatments 1 to m.", call. = FALSE)
+      working.outs <- 1:m
+    }
+    if(is.null(m)){
+      warning("Number of outcomes required to show promise, m, not given. Using number of working treatments as treatments.", call. = FALSE)
+      m <- length(working.outs)
+    }
+    if(reuse.deltas==TRUE){
+      # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
+      # !!! They are used to obtain the power, which is found given outcome effects equal to  delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
+      if(length(delta0)==1){
+        delta0 <- rep(delta0, 2)
+      }
+      if(length(delta1)==1){
+        delta1 <- rep(delta1, 2)
+      }
+      return.delta0 <- delta0
+      return.delta1 <- delta1
+      rm(delta0, delta1)
+      delta0 <- rep(return.delta0[2], K)
+      delta1 <- rep(return.delta1[2], K)
+      delta0[working.outs] <- return.delta0[1]
+      delta1[working.outs] <- return.delta1[1]
+      if(K>2){
+        warning("reuse.deltas set to TRUE: If K>2, will take delta0[1] as delta0 for all working outcomes and delta0[2] as delta0 for all non-working outcomes. Ditto delta1")
+      }
+
+    }else{
+      if(!is.null(delta.true)){
+        warning("CAUTION: reuse.deltas set to FALSE, but values supplied for true delta. This could cause problems re. delta.true and means.true")
+      }
+    }
+
+    if(!is.null(delta.true)){
+      if(reuse.true.deltas==TRUE){
+        means.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
+        if(K>2){
+          warning("reuse.deltas set to TRUE: If K>2, will take delta.true[1] as true delta for all working outcomes and delta.true[2] as true delta for all non-working outcomes.")
+        }
+      }else{
+        means.true <- delta.true
+        if(ncol(delta.true)!=K){
+          stop("The number of columns (outcomes) in delta.true does not equal K and reuse.delta.true==FALSE.")
+        }
+      }
+    }
+
+    # Checks:
+    if(length(rho.vec)!=sum(1:(K-1))) stop("Number of rho values, i.e. length of rho.vec, should be equal to sum(1:(K-1)) ", call. = FALSE)
+    if(length(delta0)!=K & !is.null(delta0)) stop ("Number of supplied uninteresting treatment effects, i.e. delta0, should be equal to K, the number of outcomes",
+                                                   call. = FALSE)
+    if(length(delta1)!=K) stop ("Number of supplied treatment effects, i.e. delta1, should be equal to K, the number of outcomes", call. = FALSE)
+    if(length(vars)!=K) stop ("Number of outcome variances, i.e. vars, should be equal to K (the number of outcomes)", call. = FALSE)
+    #### P(rejection) ####
+
+    ##### new pRejectFast, with shared constant C:
+    pRejectFastCommonC <- function(const,
+                                   J=J,
+                                   K=K,
+                                   m=m,
+                                   wang.delta,
+                                   ts,
+                                   nsims,
+                                   prob.only=TRUE,
+                                   alpha=alpha,
+                                   composite=FALSE
+    ){
+      e.vec <-  const*((1:J)/J)^(wang.delta-0.5)
+      f.vec <- -e.vec
+      f.vec[length(f.vec)] <- e.vec[length(e.vec)]
+      if(J==1){
+        if(composite==FALSE) {
+          go.overall <- colSums(t(ts) > e.vec)>=m
+        }else{
+          go.overall <- ts > e.vec
+        }
+        prob.reject <- sum(go.overall)/nsims
+        minimise.prob <- abs(prob.reject - alpha)
+        expd.no.stages <- 1
+      } else { # ie if J!=1:
+        if(composite==FALSE){
+          nogo.overall <- vector("list", J)
+          go.overall <- vector("list", J)
+          first.m.outs.exceed.e <- vector("list", J)
+          other.combn.exceed.e <- vector("list", J)
+          for(j in 1:J){
+            nogo.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) < f.vec[j])>=(K-m+1)
+            go.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) > e.vec[j])>=m
+            first.m.outs.exceed.e[[j]] <- colSums(t(ts[,(1+(j-1)*K):(m+(j-1)*K)]) > e.vec[j])==m
+            other.combn.exceed.e[[j]] <- go.overall[[j]]==TRUE & first.m.outs.exceed.e[[j]]==FALSE
+          }
+          # Are m or more boundaries crossed? Row=simulation, col=stage
+          nogo.trial.binary <- t(do.call(rbind, nogo.overall))
+          go.trial.binary <- t(do.call(rbind, go.overall))
+          first.m.outs.exceed.e <- t(do.call(rbind, first.m.outs.exceed.e))
+          other.combn.exceed.e <-  t(do.call(rbind, other.combn.exceed.e))
+        } else{ # if composite==TRUE
+          # Only J boundaries for composite:
+          nogo.trial.binary <-  t(t(ts) < f.vec)
+          go.trial.binary <- t(t(ts) > e.vec)
+          # browser()
+        }
+        # The first stage at which a nogo decision is made (and analogous for go):
+        # Add extra column of 1's so that there is always some maximum even if NOGO boundary is never crossed:
+        nogo.trial.binary.plus <- cbind(nogo.trial.binary, 1)
+        # Add extra column of 1's so that there is always some maximum even if GO boundary is never crossed:
+        go.trial.binary.plus <- cbind(go.trial.binary, 1)
+        first.nogo.stage <- Rfast::rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
+        first.go.stage <- Rfast::rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
+        first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
+        mode(first.stop.stage) <- "numeric"
+        # Does the trial make a nogo or a go decision first?
+        # Final decision: 1=nogo, 2=go
+        final.decision <- Rfast::rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
+        prob.reject <- sum(final.decision==2)/nsims
+        minimise.prob <- abs(prob.reject - alpha)^2 # 29th Jul: added square.
+        stop.stage <- Rfast::rowMins(first.stop.stage, value=TRUE) #Rfast
+        expd.no.stages <- sum(stop.stage)/nsims
+      } # end of if J==1 else
+      if(prob.only==TRUE){
+        return(minimise.prob)
+      } else{
+        if(composite==FALSE & J!=1){
+          go.decision.index <- which(final.decision==2)
+          correct.go <- rep(NA, length(go.decision.index))
+          incorrect.go <- rep(NA, length(go.decision.index))
+          for(i in 1:length(go.decision.index)){
+            correct.go[i] <- first.m.outs.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
+            incorrect.go[i] <- other.combn.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
+          }
+          prob.correct.go <- sum(correct.go)/nsims
+          prob.incorrect.go <- sum(incorrect.go)/nsims
+        }else{
+          prob.correct.go <- NA
+          prob.incorrect.go <- NA
+        }
+        return(list(prob.reject=prob.reject,
+                    expd.no.stages=expd.no.stages,
+                    f.vec=f.vec,
+                    e.vec=e.vec,
+                    prob.correct.go=prob.correct.go,
+                    prob.incorrect.go=prob.incorrect.go)
+        )
+      }
+    } # end of function
+
+    trueReject <- function(
+      J=J,
+      K=K,
+      m=m,
+      ts=ts,
+      nsims,
+      prob.only=FALSE,
+      alpha=alpha,
+      means.true=means.true,
+      vars.true=vars.true,
+      f.vec=pwr.ess$f.vec,
+      e.vec=pwr.ess$e.vec,
+      n.final=n.final,
+      composite=FALSE
+    ){
+      # Need test statistic for true effects:
+      means.true <- rep(means.true, times=J)
+      # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
+      denom <-  rep(vars.true, times=J)
+      numer <- rep((1:J)*n.final, each=K)
+      information <- numer/denom
+      tau.true <- means.true*sqrt(information)
+      ts.true <- sweep(ts, 2, tau.true, "+")   # Add the above tau vector to every row in the matrix ts
+      if(J==1){
+        if(composite==FALSE) {
+          go <- t(apply(ts.true, 1, function(x) x > e.vec))
+          go.overall <- apply(go, 1, function(x) sum(x)>=m)
+        } else{
+          ts.composite <- rowSums(ts.true)
+          go.overall <- ts.composite > e.vec
+        }
+        prob.reject <- sum(go.overall)/nsims
+        ess <- n.final
+      } else {
+        if(composite==FALSE){
+          nogo <- t(apply(ts.true, 1, function(x) x < f.vec))
+          go <- t(apply(ts.true, 1, function(x) x > e.vec))
+          nogo.overall <- vector("list", J)
+          go.overall <- vector("list", J)
+          for(j in 1:J){
+            # Subset to the K outcomes for stage j:
+            current.stage.nogo <- nogo[, (1+(j-1)*K):(j*K)]
+            current.stage.go <- go[, (1+(j-1)*K):(j*K)]
+            # Would the trial stop for either go or nogo at stage j?
+            nogo.overall[[j]] <- apply(current.stage.nogo, 1, function(x) sum(x)>=(K-m+1))
+            go.overall[[j]] <- apply(current.stage.go, 1, function(x) sum(x)>=m)
+          }
+          # Is a boundary crossed? Row=simulation, col=stage
+          nogo.trial.binary <- t(do.call(rbind, nogo.overall))
+          go.trial.binary <- t(do.call(rbind, go.overall))
+        } else {
+          # Sum the test statistics at each stage to form the composite test statistics
+          ts.composite <- matrix(NA, nrow=nsims, ncol=J)
+          for(i in 1:J){
+            ts.composite[,i] <- rowSums(ts.true[,(1+(i-1)*K):(i*K)])
+          }
+          nogo.trial.binary <- t(apply(ts.composite, 1, function(x) x < f.vec)) + 0
+          go.trial.binary <- t(apply(ts.composite, 1, function(x) x > e.vec)) + 0
+        }
+        # The first stage at which a nogo decision is made (and analogous for go):
+        first.nogo.stage <- apply(nogo.trial.binary, 1, function(x) min(which(x==1), Inf))
+        first.go.stage <- apply(go.trial.binary, 1, function(x) min(which(x==1), Inf))
+        first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
+        # Does the trial make a nogo or a go decision first?
+        # Final decision: 1=nogo, 2=go
+        final.decision <- apply(first.stop.stage, 1, which.min)
+        prob.reject <- sum(final.decision==2)/nsims
+        stop.stage <- apply(first.stop.stage, 1, min)
+        expd.no.stages <- sum(stop.stage)/nsims
+        ess <- expd.no.stages*n.final
+        #minimise.prob <- abs(prob.reject - alpha)
+      } # end of J==1 else
+      return(c(prob.reject, ess))
+    } # end of function
+
+    constToBounds <- function(const, J., wang.d){
+      e.vec <- const*((1:J.)/J.)^(wang.d-0.5)
+      f.vec <- -e.vec
+      f.vec[length(f.vec)] <-e.vec[length(e.vec)]
+      bounds <- list(e=e.vec, f=f.vec)
+      return(bounds)
+    }
+
+    createTrueTS <- function(ts., mu., vars., J., K., n., composite=FALSE){
+      mu.full.vec <- rep(mu., times=J.)
+      # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
+      denom <-  rep(vars., times=J.)
+      numer <- rep((1:J.)*n., each=K.)
+      info <- numer/denom
+      tau <- mu.full.vec*sqrt(info)
+      ts.true <- sweep(ts., 2, tau, "+")   # Add the above tau vector to every row in the matrix ts
+      if(composite){
+        ts.composite <- matrix(NA, nrow=nrow(ts.), ncol=J.)
+        for(i in 1:J.){ ts.composite[,i] <- rowSums(ts.true[, (1+(i-1)*K.):(i*K.)])
+        }
+        return(ts.composite)
+      }
+      return(ts.true)
+    }
+
+    ############### Covariance matrix ######################
+    #outcome_covars <- rep(rho.scalar, sum(1:(K-1)))
+    # ^^^ All covariances in one vector. Begin with covariances of the first outcome,
+    # i.e. p12, p13,...,p1k, then second outcome, i.e. p23, p24,...p2k, etc.
+    # Currently all equal, but code allows different value.
+    stage.row <- matrix(rep(1:J, each=K), J*K, J*K)
+    stage.col <- t(stage.row)
+    Lambda <- sqrt(pmin(stage.row, stage.col)/pmax(stage.row, stage.col))
+    rho_submatrix <- matrix(1, K, K)
+    rho_submatrix[which(lower.tri(rho_submatrix))] <- rho.vec
+    rho_submatrix <- t(rho_submatrix)
+    rho_submatrix[which(lower.tri(rho_submatrix))] <- rho.vec
+    rho_matrix <- matrix(NA, J*K, J*K)
+    for(j1 in 1:J){
+      for(j2 in 1:J){
+        rho_matrix[(1+(j1-1)*K):(j1*K), (1+(j2-1)*K):(j2*K)] <- rho_submatrix
+      }
+    }
+    Lambda <- Lambda*rho_matrix
+
+    # The means for the K test statistics at stage 1, 2, ..., J.
+    means.typeI <- rep(0, times=J*K)
+    ts <- mvtnorm::rmvnorm(nsims, mean=means.typeI, sigma = Lambda)
+
+
+    ############### Optimisation ###################
+    # FIND THE SET OF BOUNDARIES THAT MINIMISES (probability of rejection - alpha)^2
+    # NOTE: In composite function, we use method="Brent", which allows limits and one-dimensional optimisation.
+    #browser()
+    # No longer using bobyqa because optimisation is now 1-D.
+    final.const <- minqa::bobyqa(par=1,
+                                 fn = pRejectFastCommonC,
+                                 lower=0.01,
+                                 upper=30,
+                                 J=J,
+                                 K=K,
+                                 m=m,
+                                 wang.delta=wang.delta,
+                                 ts=ts,
+                                 nsims=nsims,
+                                 alpha=alpha,
+                                 prob.only=TRUE
+    )$par
+    # Use boundaries to obtain the type one error:
+    typeIerr <- pRejectFastCommonC(const=final.const,
+                                   J=J,
+                                   K=K,
+                                   m=m,
+                                   wang.delta=wang.delta,
+                                   ts=ts,
+                                   nsims=nsims,
+                                   alpha=alpha,
+                                   prob.only = FALSE)
+
+
+    ############### Obtain power ############
+    # Define this as the probability of rejecting the null, even by incorrectly concluding that the treatment has an effect on some outcome.
+    # Can use LFC or set the number and index of working treatments in the initial arguments.
+    pwr.ess <- list(0, NA, NA, NA)
+    means.power <- delta0
+    if(working.outs[1]=="lfc"){
+      std.trt.effects <- delta1/vars
+      # Choose the smallest standarised treatment effects to be the working treatment effects:
+      working.outs.idx <- rank(std.trt.effects)<=m
+    }else{
+      working.outs.idx <- working.outs
+    }
+    means.power[working.outs.idx] <- delta1[working.outs.idx]
+    means.power <- rep(means.power, times=J)
+    # Need to multiply each outcome's trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
+    denom <-  rep(vars, times=J)
+    i <- 0
+    n.vec <- 1:maxn.stage
+    while(pwr.ess[[1]]<power & i<length(n.vec)){
+      # browser()
+      i <- i+1
+      numer <- rep((1:J)*n.vec[i], each=K)
+      information <- numer/denom
+      tau <- means.power*sqrt(information)
+      ts.power <- sweep(ts, 2, tau, "+")   # Add the above tau vector to every row in the matrix ts
+      pwr.ess <- pRejectFastCommonC(J=J,
+                                    K=K,
+                                    m=m,
+                                    const=final.const,
+                                    wang.delta=wang.delta,
+                                    ts=ts.power,
+                                    nsims=nsims,
+                                    alpha = alpha,
+                                    prob.only = FALSE)
+      print(paste("Power is ", format(pwr.ess[1], digits=3), " when n per stage is ", n.vec[i], ". Expected no. of stages: ", pwr.ess$expd.no.stages, sep=""), q=F)
+
+    }
+    if(n.vec[i]==maxn.stage & pwr.ess[[1]]<power){
+      warning("For multi outcome approach, desired power not achieved with current max N", call. = FALSE)
+    }
+    n.final <- n.vec[i]
+
+    ess <- n.final*pwr.ess$expd.no.stages
+    # enm.mo <- K*n.final*pwr.ess$expd.no.stages
+    # NOTE: ESS0 is independent of n:
+    ess0 <- n.final*typeIerr$expd.no.stages
+
+    ############### True treatment effects =/= delta0 OR delta1 #################
+    createTrueTSFindpReject <- function(mu.matrix,
+                                        ts.,
+                                        vars,
+                                        J.,
+                                        K.,
+                                        n.,
+                                        const,
+                                        m,
+                                        wang.delta,
+                                        nsims,
+                                        alpha,
+                                        prob.only=FALSE,
+                                        composite=FALSE){
+      results.matrix <-  matrix(NA, nrow(mu.matrix), ncol=2)
+      for(i in 1:nrow(mu.matrix)){
+        ts.true.current <- createTrueTS(mu.=unlist(mu.matrix[i,]),
+                                        ts.=ts.,
+                                        vars=vars,
+                                        J.=J.,
+                                        K.=K.,
+                                        n.=n.,
+                                        composite=composite)
+        true.results <- pRejectFastCommonC(const=const,
+                                           J=J.,
+                                           K=K.,
+                                           m=m,
+                                           wang.delta=wang.delta,
+                                           ts=ts.true.current,
+                                           nsims=nsims,
+                                           prob.only=FALSE,
+                                           alpha=alpha,
+                                           composite=composite)
+        results.matrix[i,] <- c(true.results$prob.reject, n.*true.results$expd.no.stages)
+      }
+      return(as.data.frame(results.matrix))
+    }
+
+    if(!is.null(delta.true)){
+      true.oc <- createTrueTSFindpReject(mu.matrix=means.true,
+                                         ts.=ts,
+                                         vars=vars.true,
+                                         J.=J,
+                                         K.=K,
+                                         n.=n.final,
+                                         const=final.const,
+                                         m=m,
+                                         wang.delta=wang.delta,
+                                         nsims=nsims,
+                                         alpha=alpha,
+                                         prob.only=FALSE,
+                                         composite=FALSE)
+
+      mo.true <- cbind(true.oc, delta.true, means.true)
+      if(ncol(delta.true)==2){
+        names(mo.true) <- c("prob.reject", "ess", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""))
+      }else{
+        names(mo.true) <- c("prob.reject", "ess",  paste("delta.", 1:ncol(means.true), sep=""), paste("mu.", 1:ncol(means.true), sep=""))
+      }
+      true.results <- mo.true
+      if(ncol(delta.true==2)){
+        names(output.true.ratios) <- c("p.reject.mo", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""))
+      }else{
+        names(output.true.ratios) <- c("p.reject.mo", paste("delta.", 1:ncol(means.true), sep=""), paste("mu.", 1:ncol(means.true), sep=""))
+      }
+    }  # end of if statement
+
+    # Shared design characteristics:
+    if(reuse.deltas==TRUE){
+      des.chars <- data.frame(K, m, J, t(return.delta0), t(return.delta1), alpha, power, rho.vec[1], wang.delta)
+      colnames(des.chars) <- c("K", "m", "J", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor", "WangDelta")
+    }else{
+      des.chars <- data.frame(K, m, J, t(delta0), t(delta1), alpha, power, rho.vec[1], wang.delta) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
+      colnames(des.chars) <- c("K", "m", "J", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor", "WangDelta")
+    }
+
+    final.n.stage <- n.final
+    N <- J*final.n.stage
+    ess0.vec <- ess0
+    ess1.vec <- ess
+    type1.vec <- typeIerr$prob.reject
+    power.vec <- pwr.ess$prob.reject
+    bounds.const <- final.const
+    design.results <- data.frame(final.n.stage, N, ess0.vec, ess1.vec, type1.vec, power.vec, bounds.const)
+    names(design.results) <- c("n.stage", "N", "ESS0", "ESS1", "typeIerr", "power", "C")
+    #design.results <- as.data.frame(design.results)
+    design.results$p.correct.go <- c(pwr.ess$prob.correct.go)
+    design.results$p.incorrect.go <- c(pwr.ess$prob.incorrect.go)
+    to.return <- list(input=des.chars,
+                      results=design.results)
+    if(!is.null(delta.true)){
+      to.return$true.results <- true.results
+    }
+    # if(return.boundaries==TRUE){
+    #   to.return$bounds <- boundaries
+    #   to.return$bounds.c <- boundaries.composite
+    # }
+    if(return.ts==TRUE){
+      to.return$ts <- ts
+      to.return$ts.pwr <- ts.power
+    }
+    class(to.return) <- "moms"
+    return(to.return)
+  } # end of overall function
+  #### End of main function ####
 
 
   #### Wrap output obtained from foreach/parallelisation: ####
@@ -952,11 +1455,9 @@
                                           delta1=current.delta1,
                                           vars=rep(1, K),
                                           rho.vec =  rep(0.5, times=sum(1:(K-1))),
-                                          means.true=NULL,
                                           vars.true = NULL,
                                           nsims,
                                           wang.delta,
-                                          fix.n=fix.n,
                                           working.outs = 1:m
                                           )
     }
