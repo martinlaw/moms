@@ -666,6 +666,28 @@ p.reject.single.stage <- function(bounds,
   }
 }
 
+#' Find Multi-Outcome Two-Stage Drop-the-Loser designs
+#'
+#' @description  This function finds multi-outcome, two-stage drop-the-loser designs that declare trial success
+#' when a specified number of outcomes show promise. This function uses simulation.
+#' @param K Number of outcomes
+#' @param Kmax Maximum number of outcomes permitted in stage 2
+#' @param m Number of outcomes required to show promise for trial success
+#' @param vars A vector of outcome variances. If single value is entered, it is recycled with a warning.
+#' @param rho.vec A vector of outcome correlations. If single value is entered, it is recycled with a warning.
+#' @param delta0 A vector of anticipated lower effect sizes.
+#' @param delta1 A vector of anticipated upper effect sizes.
+#' @param delta.true Optional. A matrix of true effect sizes (with number of columns==K).
+#' @param cp.l The lower bound for conditional power.
+#' @param cp.u The upper bound for conditional power.
+#' @param n.min The minimum sample size to search over.
+#' @param n.max The maximum sample size to search over.
+#' @return The function returns a list of length three. The first element, input, contains the values inputted into the call.
+#' The second element, results, gives the final and interim stopping boundaries and the operating characteristics.
+#' The third element, lookup, is a lookup table containing the test statistics for each outcome that correspond to a range of CP values.
+#' @details if delta.true is used, the operating characteristics of the obtained design are given, taking into account
+#' the true effect sizes.
+#' @export
 findDTL <- function(nsims=default.nsims.dtl,
                            K,
                            Kmax,
@@ -1224,6 +1246,11 @@ findDTLbounds <- function(cp,
   return(stopping.bound)
 }
 
+#' Obtain interim decision for multi-outcome, two-stage drop-the-loser trial
+#'
+#' @description  This function gives the interim decision for multi-outcome, two-stage drop-the-loser designs that declare trial success
+#' when a specified number of outcomes show promise.
+#' @export
 interimDecision <- function(findDTL.output, test.statistics){
   # find CPs:
   lookup.tab <- findDTL.output$lookup
