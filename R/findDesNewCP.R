@@ -30,7 +30,7 @@ findR <- function(bounds,
                   nsims.,
                   K.,
                   m.,
-                  max.outs.s2.,
+                  Kmax.,
                   working.outs.,
                   vars.,
                   delta0.,
@@ -87,7 +87,7 @@ findR <- function(bounds,
 
 
   ### minus.cp <- -cp
-  ### greatest.cps <- t(apply(minus.cp, 1, function(x) rank(x) <= max.outs.s2.))
+  ### greatest.cps <- t(apply(minus.cp, 1, function(x) rank(x) <= Kmax.))
   ### retained.outcomes <- greatest.cps*exceed.cpl[continue] # should this subset be removed?
   ### retain.continue <- retained.outcomes*continue
   ### retain.continue=1 : trial continues to stage 2 and outcome is retained.
@@ -103,14 +103,14 @@ findR <- function(bounds,
   # j<-1
   # greatest.cps.list <- vector("list", nsims.)
   # for(i in (1:nsims.)[continue]){
-  #   greatest.cps.list[[j]] <- rank(minus.cp[i,]) <= max.outs.s2.
+  #   greatest.cps.list[[j]] <- rank(minus.cp[i,]) <= Kmax.
   #   j <- j+1
   # }
   # greatest.cps <- do.call(rbind, greatest.cps.list)
   # ^ Superceded by code below:
   minus.cp.continue.subset <- minus.cp[continue,]
   ranked.rows <- t(apply(minus.cp.continue.subset, 1, rank))
-  greatest.cps <- ranked.rows <= max.outs.s2.
+  greatest.cps <- ranked.rows <= Kmax.
 
   retained.outcomes <- greatest.cps*exceed.cpl[continue,]
   n.obs.s2 <- sum(retained.outcomes)
@@ -183,7 +183,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
   n.init <- ceiling(n.min+(n.max-n.min)/2)
 
   K <- max.outcomes[1]
-  max.outs.s2 <- max.outcomes[2]
+  Kmax <- max.outcomes[2]
   m <- max.outcomes[3]
 
   # recycleDeltas <- function(vec, working.outs., K.){
@@ -209,11 +209,11 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
     warning("Indices of working outcomes not supplied. Taking indices of working outcomes as outcomes 1 to m.", call. = FALSE)
     working.outs <- 1:m
   }
-  if(is.null(max.outs.s2)){
+  if(is.null(Kmax)){
     warning("Maxmimum number of outcomes allowed in stage 2 not supplied. Using the number of outcomes required to show promise, m")
-    max.outs.s2 <- m
+    Kmax <- m
   }
-  if(max.outs.s2 < m){
+  if(Kmax < m){
     stop("Maxmimum number of outcomes allowed in stage 2, max.outcomes[2], must be greater than or equal to the number of outcomes required to show promise, m", call=F)
   }
   if(length(rho.vec)!=1 & length(rho.vec)!=sum(1:(K-1))){
@@ -284,7 +284,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
                   nsims.=nsims,
                   K.=K,
                   m.=m,
-                  max.outs.s2.=max.outs.s2,
+                  Kmax.=Kmax,
                   working.outs.=working.outs,
                   vars.=vars,
                   delta0.=delta0,
@@ -302,7 +302,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
                         nsims.=nsims,
                         K.=K,
                         m.=m,
-                        max.outs.s2.=max.outs.s2,
+                        Kmax.=Kmax,
                         working.outs.=working.outs,
                         vars.=vars,
                         delta0.=delta0,
@@ -334,7 +334,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
                                nsims.=nsims,
                                K.=K,
                                m.=m,
-                               max.outs.s2.=max.outs.s2,
+                               Kmax.=Kmax,
                                working.outs.=working.outs,
                                vars.=vars,
                                delta0.=delta0,
@@ -351,7 +351,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
                      nsims.=nsims,
                      K.=K,
                      m.=m,
-                     max.outs.s2.=max.outs.s2,
+                     Kmax.=Kmax,
                      working.outs.=working.outs,
                      vars.=vars,
                      delta0.=delta0,
@@ -366,7 +366,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
                       nsims.=nsims,
                       K.=K,
                       m.=m,
-                      max.outs.s2.=max.outs.s2,
+                      Kmax.=Kmax,
                       working.outs.=working.outs,
                       vars.=vars,
                       delta0.=delta0,
@@ -491,7 +491,7 @@ if(fix.n==TRUE){
                                  nsims.=nsims,
                                  K.=K,
                                  m.=m,
-                                 max.outs.s2.=max.outs.s2,
+                                 Kmax.=Kmax,
                                  working.outs.=working.outs,
                                  vars.=vars,
                                  delta0.=delta0,
@@ -507,7 +507,7 @@ if(fix.n==TRUE){
                               nsims.=nsims,
                               K.=K,
                               m.=m,
-                              max.outs.s2.=max.outs.s2,
+                              Kmax.=Kmax,
                               working.outs.=working.outs,
                               vars.=vars,
                               delta0.=delta0,
@@ -553,7 +553,7 @@ if(!is.null(delta.true)){
                      nsims.=nsims,
                      K.=K,
                      m.=m,
-                     max.outs.s2.=max.outs.s2,
+                     Kmax.=Kmax,
                      working.outs.=working.outs,
                      vars.=vars,
                      delta1.=delta1,
@@ -616,11 +616,11 @@ if(!is.null(delta.true)){
   design.results$design <- design
   # Shared results:
   if(reuse.deltas==TRUE){
-    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
-    colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
+    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
+    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
   }else{
-    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
-    colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor")
+    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
+    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor")
   }
   des.chars$ess0.ratio <- ess.h0.dtl/ess.h0.single.stage
   des.chars$ess1.ratio <- ess.h1.dtl/ess.h1.single.stage
@@ -667,7 +667,9 @@ p.reject.single.stage <- function(bounds,
 }
 
 findCPloserDes <- function(nsims=default.nsims.dtl,
-                           max.outcomes=default.max.outcomes.dtl,
+                           K,
+                           Kmax,
+                           m,
                            vars=default.vars.dtl,
                            delta0=default.delta0.dtl,
                            delta1=default.delta1.dtl,
@@ -687,9 +689,9 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
 {
   n.init <- ceiling(n.min+(n.max-n.min)/2)
 
-  K <- max.outcomes[1]
-  max.outs.s2 <- max.outcomes[2]
-  m <- max.outcomes[3]
+  # K <- max.outcomes[1]
+  # Kmax <- max.outcomes[2]
+  # m <- max.outcomes[3]
 
   #### Warnings, checks ####
   if(is.null(delta0)){
@@ -711,11 +713,11 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
     warning("Indices of working outcomes not supplied. Taking indices of working outcomes as outcomes 1 to m.", call. = FALSE)
     working.outs <- 1:m
   }
-  if(is.null(max.outs.s2)){
+  if(is.null(Kmax)){
     warning("Maxmimum number of outcomes allowed in stage 2 not supplied. Using the number of outcomes required to show promise, m")
-    max.outs.s2 <- m
+    Kmax <- m
   }
-  if(max.outs.s2 < m){
+  if(Kmax < m){
     stop("Maxmimum number of outcomes allowed in stage 2, max.outcomes[2], must be greater than or equal to the number of outcomes required to show promise, m", call=F)
   }
   if(length(rho.vec)!=1 & length(rho.vec)!=sum(1:(K-1))){
@@ -786,7 +788,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                   nsims.=nsims,
                   K.=K,
                   m.=m,
-                  max.outs.s2.=max.outs.s2,
+                  Kmax.=Kmax,
                   working.outs.=working.outs,
                   vars.=vars,
                   delta0.=delta0,
@@ -804,7 +806,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                         nsims.=nsims,
                         K.=K,
                         m.=m,
-                        max.outs.s2.=max.outs.s2,
+                        Kmax.=Kmax,
                         working.outs.=working.outs,
                         vars.=vars,
                         delta0.=delta0,
@@ -836,7 +838,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                       nsims.=nsims,
                       K.=K,
                       m.=m,
-                      max.outs.s2.=max.outs.s2,
+                      Kmax.=Kmax,
                       working.outs.=working.outs,
                       vars.=vars,
                       delta0.=delta0,
@@ -853,7 +855,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                      nsims.=nsims,
                      K.=K,
                      m.=m,
-                     max.outs.s2.=max.outs.s2,
+                     Kmax.=Kmax,
                      working.outs.=working.outs,
                      vars.=vars,
                      delta0.=delta0,
@@ -868,7 +870,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                       nsims.=nsims,
                       K.=K,
                       m.=m,
-                      max.outs.s2.=max.outs.s2,
+                      Kmax.=Kmax,
                       working.outs.=working.outs,
                       vars.=vars,
                       delta0.=delta0,
@@ -896,7 +898,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                                              nsims.=nsims,
                                              K.=K,
                                              m.=m,
-                                             max.outs.s2.=max.outs.s2,
+                                             Kmax.=Kmax,
                                              working.outs.=working.outs,
                                              vars.=vars,
                                              delta1.=delta1,
@@ -955,11 +957,11 @@ colnames(lookup.tab) <- c("cp", paste("k", 1:K, sep=""))
   names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power", paste("f.", 1:K, sep=""), paste("e.", 1:K, sep=""))
   # Shared results:
   if(reuse.deltas==TRUE){
-    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
-    colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
+    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
+    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
   }else{
-    des.chars <- data.frame(K, max.outs.s2, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
-    colnames(des.chars) <- c("K", "max.outs.s2", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor")
+    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
+    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor")
   }
   output <- list(input=des.chars,
                  results=design.results)
@@ -983,9 +985,9 @@ tidyOutput <- function(output.list){
   input.mat <- data.frame(input.mat)
   input.mat$km <- paste("K=", input.mat$K, ", m=", input.mat$m, sep="")
   input.mat$max.s2.prop <- "K"
-  input.mat$max.s2.prop[input.mat$K-input.mat$max.outs.s2==1] <- "K-1"
-  input.mat$max.s2.prop[input.mat$max.outs.s2/input.mat$K==0.5] <- "K/2"
-  input.mat$outs.names <- paste("K=", input.mat$K, ", Kmax=", input.mat$max.outs.s2, ", m=", input.mat$m, sep="")
+  input.mat$max.s2.prop[input.mat$K-input.mat$Kmax==1] <- "K-1"
+  input.mat$max.s2.prop[input.mat$Kmax/input.mat$K==0.5] <- "K/2"
+  input.mat$outs.names <- paste("K=", input.mat$K, ", Kmax=", input.mat$Kmax, ", m=", input.mat$m, sep="")
   input.repeated <- input.mat[rep(1:nrow(input.mat), each=2),]
   results.list <- lapply(output.list, function(x) x$results)
   results.mat <- do.call(rbind, results.list)
@@ -1239,9 +1241,8 @@ interimDecision <- function(findCPloserDes.output, test.statistics){
   stop.efficacy <- sum(above.cp.u)>=findCPloserDes.output$input$m
 
   if(stop.futility==FALSE & stop.efficacy==FALSE){
-    Kmax <- findCPloserDes.output$input$max.outs.s2
     above.cp.l <- sum(!below.cp.l)
-    no.outs.retained.s2 <- min(Kmax, above.cp.l)
+    no.outs.retained.s2 <- min(findCPloserDes.output$input$Kmax, above.cp.l)
     cp.ranks <- rank(1-cps)
     outs.retained.s2 <- which(cp.ranks <= no.outs.retained.s2)
     decision <- paste(c("Continue trial, retaining the following outcome(s): ", outs.retained.s2), collapse = " ")
