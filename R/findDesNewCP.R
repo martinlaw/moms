@@ -682,7 +682,8 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                            power=default.power.dtl,
                            rho.vec=default.cor.dtl,
                            working.outs=NULL,
-                           fix.n=FALSE)
+                           fix.n=FALSE,
+                           display.lookup=TRUE)
 {
   n.init <- ceiling(n.min+(n.max-n.min)/2)
 
@@ -699,9 +700,12 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
     warning("No correlations supplied. Using rho=0.1 for all correlations.", call. = FALSE)
     rho.vec <- rep(0.1, times=sum(1:(K-1)))
   }
-  if(is.null(vars) | length(vars)==1){
-    warning("Either zero or one outcome variance supplied. Using var=1 for all outcomes.", call. = FALSE)
-    vars <- rep(1, K)
+  if(is.null(vars)){
+    stop("Either no outcome variance (vars) supplied. Supply at least one value (to be used for all outcomes) or a vector of K values.", call. = FALSE)
+  }
+  if(length(vars)==1){
+    warning("Only one outcome variance (vars) supplied. Using this value for all outcomes.", call. = FALSE)
+    vars <- rep(vars, K)
   }
   if(is.null(working.outs)){
     warning("Indices of working outcomes not supplied. Taking indices of working outcomes as outcomes 1 to m.", call. = FALSE)
@@ -912,13 +916,27 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
   }
 
   # Obtain interim bounds:
-  interim.bounds <- findDTLbounds(cp.l=cp.l,
-                                  cp.u=cp.u,
-                                  n.stage=final.n.stage,
-                                  vars=vars,
-                                  z.alpha=final.r.k,
-                                  d.1=delta1)
-  #### output  ####
+  int.bounds.l <- findDTLbounds(cp=cp.l,
+                                n.stage=final.n.stage,
+                                vars=vars,
+                                z.alpha=final.r.k,
+                                d.1=delta1)
+  int.bounds.u <- findDTLbounds(cp=cp.u,
+                                n.stage=final.n.stage,
+                                vars=vars,
+                                z.alpha=final.r.k,
+                                d.1=delta1)
+ # Create lookup table:
+cp.vec <- seq(from=0, to=1, by=0.01)
+lookup.tab <- sapply(X=cp.vec, FUN=function(x) {findDTLbounds(cp = x,
+                                                n.stage = final.n.stage,
+                                                vars=vars,
+                                                z.alpha=final.r.k,
+                                                d.1=delta1)})
+lookup.tab <- cbind(cp.vec, t(lookup.tab))
+colnames(lookup.tab) <- c("cp", paste("k", 1:K, sep=""))
+
+#### output  ####
   # Collate results for output:
   typeIerr.total.c <- sum(t1.final.n$prob.reject)
   power.c <- final.pwr$prob.reject
@@ -933,7 +951,7 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
   #colnames(final.bounds) <- paste("r.k", 1:K, sep="") # Only needed when bounds differ
   final.n.vec <- final.n.stage
   final.N.vec <- J*final.n.stage
-  design.results <- data.frame(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c, t(interim.bounds))
+  design.results <- data.frame(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c, t(int.bounds.l), t(int.bounds.u))
   names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power", paste("f.", 1:K, sep=""), paste("e.", 1:K, sep=""))
   # Shared results:
   if(reuse.deltas==TRUE){
@@ -947,6 +965,9 @@ findCPloserDes <- function(nsims=default.nsims.dtl,
                  results=design.results)
   #paths=rbind(final.pwr$paths, pwr.nodrop.output$paths)
   #cp=pwr.output$cp
+  if(display.lookup==TRUE){
+    output$lookup <- lookup.tab
+  }
   if(!is.null(delta.true)){
     output$true.results=output.true
   }
@@ -1182,8 +1203,7 @@ createSubset <- function(raw.output, delta.matrix){
 
 
 # Find interim stopping boundaries ####
-findDTLbounds <- function(cp.l,
-                  cp.u,
+findDTLbounds <- function(cp,
                   n.stage,
                   vars,
                   z.alpha,
@@ -1198,24 +1218,42 @@ findDTLbounds <- function(cp.l,
   information.j <- numer/denom
   numer.J <- J*n.stage
   information.final <- numer.J/denom
-  f <- (sqrt(information.final-information.j)*qnorm(cp.l) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
-  e <- (sqrt(information.final-information.j)*qnorm(cp.u) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
-  return(c(f, e))
+  stopping.bound <- (sqrt(information.final-information.j)*qnorm(cp) +  z.alpha*sqrt(information.final) - (information.final-information.j)*d.1) / sqrt(information.j)
+  return(stopping.bound)
 }
 
+interimDecision <- function(findCPloserDes.output, test.statistics){
+  # find CPs:
+  lookup.tab <- findCPloserDes.output$lookup
+  tab.subset <- lookup.tab[,-1]
+  abs.diff <- abs(sweep(tab.subset, 2, test.statistics))
+  cp.index <- apply(abs.diff, 2, which.min)
+  cps <- lookup.tab[cp.index, "cp"]
+  cps <- data.frame(t(cps))
+  names(cps) <- paste("CP.k", 1:findCPloserDes.output$input$K, sep="")
 
+  # Does trial end at interim?
+  below.cp.l <- cps<findCPloserDes.output$input$cp.l
+  stop.futility <- sum(below.cp.l)>=(findCPloserDes.output$input$K - findCPloserDes.output$input$m + 1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
+  above.cp.u <- cps>findCPloserDes.output$input$cp.u
+  stop.efficacy <- sum(above.cp.u)>=findCPloserDes.output$input$m
 
-stopDecision <- function(){
-  z.alpha <- bounds
-  cp.component1 <- sweep(ts.s1, 2, sqrt(information.j), "*")
-  cp.component23 <- -z.alpha*sqrt(information.final) + (information.final-information.j)*delta1. # Note: always delta1 here, whether typeIerror or power
-  cp.numer <- sweep(cp.component1, 2, cp.component23, "+") # Add components 1 and 23 to create numerator
-  cp.denom <- sqrt(information.final-information.j)
-  cp <- pnorm(sweep(cp.numer, 2, cp.denom, "/"))
-  #stop.futility <- apply(cp, 1, function(x) all(x<cp.l.)) # Too slow. Use line below
-  below.cp.bounds <- cp<cp.l.
-  stop.futility <- rowSums(below.cp.bounds)>=(K.-m.+1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
-  #stop.efficacy <- rep(FALSE, nsims.) # If no efficacy stopping permitted.
-  #stop.efficacy <- apply(cp, 1, function(x) any(x>cp.u)) # only correct if m==1.
-  stop.efficacy <- rowSums(cp>=cp.u.)>=m.
+  if(stop.futility==FALSE & stop.efficacy==FALSE){
+    Kmax <- findCPloserDes.output$input$max.outs.s2
+    above.cp.l <- sum(!below.cp.l)
+    no.outs.retained.s2 <- min(Kmax, above.cp.l)
+    cp.ranks <- rank(1-cps)
+    outs.retained.s2 <- which(cp.ranks <= no.outs.retained.s2)
+    decision <- paste(c("Continue trial, retaining the following outcome(s): ", outs.retained.s2), collapse = " ")
+  }
+  if(stop.futility==TRUE){
+    decision <- "Stop trial for futility"
+  }
+  if(stop.efficacy==TRUE){
+    decision <- "Stop trial for efficacy"
+  }
+  print(decision, q=F)
+  return(list(decision=decision,
+              cp=cps)
+  )
 }
