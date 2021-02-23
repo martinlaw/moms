@@ -666,7 +666,7 @@ p.reject.single.stage <- function(bounds,
   }
 }
 
-findCPloserDes <- function(nsims=default.nsims.dtl,
+findDTL <- function(nsims=default.nsims.dtl,
                            K,
                            Kmax,
                            m,
@@ -1224,25 +1224,25 @@ findDTLbounds <- function(cp,
   return(stopping.bound)
 }
 
-interimDecision <- function(findCPloserDes.output, test.statistics){
+interimDecision <- function(findDTL.output, test.statistics){
   # find CPs:
-  lookup.tab <- findCPloserDes.output$lookup
+  lookup.tab <- findDTL.output$lookup
   tab.subset <- lookup.tab[,-1]
   abs.diff <- abs(sweep(tab.subset, 2, test.statistics))
   cp.index <- apply(abs.diff, 2, which.min)
   cps <- lookup.tab[cp.index, "cp"]
   cps <- data.frame(t(cps))
-  names(cps) <- paste("CP.k", 1:findCPloserDes.output$input$K, sep="")
+  names(cps) <- paste("CP.k", 1:findDTL.output$input$K, sep="")
 
   # Does trial end at interim?
-  below.cp.l <- cps<findCPloserDes.output$input$cp.l
-  stop.futility <- sum(below.cp.l)>=(findCPloserDes.output$input$K - findCPloserDes.output$input$m + 1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
-  above.cp.u <- cps>findCPloserDes.output$input$cp.u
-  stop.efficacy <- sum(above.cp.u)>=findCPloserDes.output$input$m
+  below.cp.l <- cps<findDTL.output$input$cp.l
+  stop.futility <- sum(below.cp.l)>=(findDTL.output$input$K - findDTL.output$input$m + 1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
+  above.cp.u <- cps>findDTL.output$input$cp.u
+  stop.efficacy <- sum(above.cp.u)>=findDTL.output$input$m
 
   if(stop.futility==FALSE & stop.efficacy==FALSE){
     above.cp.l <- sum(!below.cp.l)
-    no.outs.retained.s2 <- min(findCPloserDes.output$input$Kmax, above.cp.l)
+    no.outs.retained.s2 <- min(findDTL.output$input$Kmax, above.cp.l)
     cp.ranks <- rank(1-cps)
     outs.retained.s2 <- which(cp.ranks <= no.outs.retained.s2)
     decision <- paste(c("Continue trial, retaining the following outcome(s): ", outs.retained.s2), collapse = " ")
