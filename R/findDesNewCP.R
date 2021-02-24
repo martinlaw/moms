@@ -690,39 +690,50 @@ p.reject.single.stage <- function(bounds,
 #' @param K Number of outcomes
 #' @param Kmax Maximum number of outcomes permitted in stage 2
 #' @param m Number of outcomes required to show promise for trial success
-#' @param vars A vector of outcome variances. If single value is entered, it is recycled with a warning.
-#' @param rho.vec A vector of outcome correlations. If single value is entered, it is recycled with a warning.
-#' @param delta0 A vector of anticipated lower effect sizes.
-#' @param delta1 A vector of anticipated upper effect sizes.
-#' @param delta.true Optional. A matrix of true effect sizes (with number of columns==K).
+#' @param alpha.k The desired type-I error-rate.
+#' @param power The desired power.
+#' @param vars A vector of outcome variances. If single value is entered, it is used for all outcomes with a warning.
+#' @param corr.scalar A scalar of the correlation between outcomes. If entered, it is used for all correlations with a warning.
+#' @param corr.mat A square matrix of the correlations between outcomes. Must be K-dimensional and have 1's on the diagonal.
+#' @param delta0 A vector of anticipated lower effect sizes. If a single value is entered, it is used for all outcomes with a warning.
+#' @param delta1 A vector of anticipated upper effect sizes. If a single value is entered, it is used for all outcomes with a warning.
+#' @param delta.true Optional. A matrix of true effect sizes (with number of columns==K). If only 2 columns are supplied, will take delta.true[1] as true delta for all working outcomes and delta.true[2] as true delta for all non-working outcomes.
 #' @param cp.l The lower bound for conditional power.
 #' @param cp.u The upper bound for conditional power.
 #' @param n.min The minimum sample size to search over.
 #' @param n.max The maximum sample size to search over.
-#' @return The function returns a list of length three. The first element, input, contains the values inputted into the call.
+#' @param working.outs A vector of the indices of outcomes that are taken to be the "working" or "best-performing" outcomes for the purposes of calculating the sample size. If not given, the first m outcomes will be used, with a warning.
+#' @param nsims The number of trials simulated. Default is 1000.
+#' @return The function returns a list of length two The first element, input, contains the values inputted into the call.
 #' The second element, results, gives the final and interim stopping boundaries and the operating characteristics.
-#' The third element, lookup, is a lookup table containing the test statistics for each outcome that correspond to a range of CP values.
-#' @details if delta.true is used, the operating characteristics of the obtained design are given, taking into account
-#' the true effect sizes.
+#' @details if delta.true is used, an additional list element is returned, true.results, containing the operating characteristics of the obtained design taking into account the true effect sizes supplied.
+#' @examples
+#' findDTL(K=4, Kmax=3, m=2, vars=c(1, 1.01, 2, 1.5), delta0=0.1, delta1=0.4, alpha.k=0.05, cp.l=0.3, cp.u=0.95, n.min=10, n.max=40, power=0.8, corr.scalar=0.4, working.outs=c(1,2))
+#'
+#' m1 <- matrix(NA, n, n)
+#' m1[lower.tri(m1, diag=F)] <- vec
+#' m1 <- t(m1)
+#' m1[lower.tri(m1, diag=F)] <- vec
+#' diag(m1) <- 1
+#' findDTL(nsims = 1e3, K=4, Kmax=3, m=2, vars = c(1, 1.01, 2, 1.5), delta0 = 0.1, delta1 = 0.4, alpha.k = 0.05, cp.l = 0.3, cp.u = 0.95, n.min = 10, n.max = 40, power = 0.8, corr.mat = m1, working.outs=c(1,2))
 #' @export
-findDTL <- function(nsims=default.nsims.dtl,
-                           K,
-                           Kmax,
-                           m,
-                           corr.mat=NULL,
-                           vars=NULL,
-                           corr.scalar=NULL,
-                           delta0=default.delta0.dtl,
-                           delta1=default.delta1.dtl,
-                           delta.true=NULL,
-                           reuse.deltas=FALSE,
-                           alpha.k=default.alpha.dtl,
-                           cp.l=default.cp.l.dtl,
-                           cp.u=default.cp.u.dtl,
-                           n.min=default.nmin.dtl,
-                           n.max=default.nmax.dtl,
-                           power=default.power.dtl,
-                           working.outs=NULL
+findDTL <- function(K,
+                    Kmax,
+                    m,
+                    alpha.k,
+                    power,
+                    corr.mat=NULL,
+                    vars=NULL,
+                    corr.scalar=NULL,
+                    delta0,
+                    delta1,
+                    delta.true=NULL,
+                    cp.l,
+                    cp.u,
+                    n.min,
+                    n.max,
+                    working.outs=NULL,
+                    nsims=1e3
                     )
 {
   n.init <- ceiling(n.min+(n.max-n.min)/2)
@@ -737,7 +748,7 @@ findDTL <- function(nsims=default.nsims.dtl,
     delta0 <- rep(-1000, K)
   }
   if(is.null(corr.scalar) & is.null(corr.mat)){
-    stop("Supply either correlation matrix (corr.mat) with 1's on the diagonal, or a single shared value for correlation (corr.scalar).", call. = FALSE)
+    stop("Supply either correlation matrix (corr.mat) with 1's on the diagonal, or a single shared value for correlation (corr.scalar).")
   }
   if(!is.null(corr.mat)){
     if(any(!is.matrix(corr.mat), dim(corr.mat)!=c(K, K), diag(corr.mat)!=rep(1, K))){
@@ -773,7 +784,7 @@ findDTL <- function(nsims=default.nsims.dtl,
     working.outs <- 1:m
   }
   if(is.null(Kmax)){
-    warning("Maxmimum number of outcomes allowed in stage 2 not supplied. Using the number of outcomes required to show promise, m")
+    warning("Maxmimum number of outcomes allowed in stage 2 not supplied. Using the number of outcomes required to show promise, m.", call. = F)
     Kmax <- m
   }
   if(Kmax < m){
@@ -783,12 +794,7 @@ findDTL <- function(nsims=default.nsims.dtl,
   #   stop("The number of correlation terms must be equal to 1 (in which case it is equal across all pairs of outcomes) or equal to the number of pairs of outcomes",
   #        call.=FALSE)
   # }
-  if(reuse.deltas==TRUE){
-    # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
-    # !!! They are used to obtain the power, which is found given outcome effects equal to delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
-    if(length(delta0)>1 | length(delta0)>1){
-      stop("reuse.deltas set to TRUE, so single values of delta0 and delta1 should be supplied.")
-    }
+  if(length(delta0)==1 & length(delta1)==1){
     # if(length(delta0)==1){
     #   delta0 <- rep(delta0, 2)
     # }
@@ -807,10 +813,13 @@ findDTL <- function(nsims=default.nsims.dtl,
     # }
     delta0 <- rep(delta0, K)
     delta1 <- rep(delta1, K)
+    warning("Single values of delta0 and delta1 supplied. Using these values for all outcomes", call. = FALSE)
     if(!is.null(delta.true)){
-      delta.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
-      if(K>2){
-        warning("reuse.deltas set to TRUE: As K>2, will take delta.true[1] as true delta for all working outcomes (e.g. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (e.g. m+1 to K.")
+      if(ncol(delta.true)==2){
+        delta.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
+        if(K>2){
+        warning("As K>2 and delta.true contains only two columns, will take delta.true[1] as true delta for all working outcomes (e.g. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (e.g. m+1 to K).", call. = F)
+        }
       }
     }
   }
@@ -1274,6 +1283,7 @@ findDTLbounds <- function(cp,
 #'
 #' @description  This function gives the interim decision for multi-outcome, two-stage drop-the-loser designs that declare trial success
 #' when a specified number of outcomes show promise.
+#' @return If return.lookup==TRUE, the function will return a third list element, lookup, which is a lookup table containing the test statistics for each outcome that correspond to a range of CP values.
 #' @export
 interimDecision <- function(findDTL.output,
                             test.statistics,

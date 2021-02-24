@@ -4,7 +4,10 @@
 \alias{interimDecision}
 \title{Obtain interim decision for multi-outcome, two-stage drop-the-loser trial}
 \usage{
-interimDecision(findDTL.output, test.statistics)
+interimDecision(findDTL.output, test.statistics, return.lookup = FALSE)
+}
+\value{
+If return.lookup==TRUE, the function will return a third list element, lookup, which is a lookup table containing the test statistics for each outcome that correspond to a range of CP values.
 }
 \description{
 This function gives the interim decision for multi-outcome, two-stage drop-the-loser designs that declare trial success
