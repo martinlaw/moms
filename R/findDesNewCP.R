@@ -1,4 +1,4 @@
-createCovMat <- function(J.,
+createCovMatOld <- function(J.,
                          K.,
                          rho.vec.){
   stage.row <- matrix(rep(1:J., each=K.), J.*K., J.*K.)
@@ -19,6 +19,24 @@ createCovMat <- function(J.,
 }
 
 
+createCovMat <- function(J.,
+                         K.,
+                         corr.mat){
+  stage.row <- matrix(rep(1:J., each=K.), J.*K., J.*K.)
+  stage.col <- t(stage.row)
+  Lambda <- sqrt(pmin(stage.row, stage.col)/pmax(stage.row, stage.col))
+  rho_matrix <- matrix(NA, J.*K., J.*K.)
+  for(j1 in 1:J.){
+    for(j2 in 1:J.){
+      rho_matrix[(1+(j1-1)*K.):(j1*K.), (1+(j2-1)*K.):(j2*K.)] <- corr.mat
+    }
+  }
+  Lambda <- Lambda*rho_matrix
+  return(Lambda)
+}
+
+
+
 
 findR <- function(bounds,
                   typeI.power="typeI",
@@ -26,7 +44,6 @@ findR <- function(bounds,
                   n.stage,
                   return.optimisation=FALSE,
                   drop.outcomes=TRUE,
-                  alpha.combine=TRUE,
                   nsims.,
                   K.,
                   m.,
@@ -692,21 +709,20 @@ findDTL <- function(nsims=default.nsims.dtl,
                            K,
                            Kmax,
                            m,
-                           vars=default.vars.dtl,
+                           corr.mat=NULL,
+                           vars=NULL,
+                           corr.scalar=NULL,
                            delta0=default.delta0.dtl,
                            delta1=default.delta1.dtl,
                            delta.true=NULL,
-                           reuse.deltas=TRUE,
+                           reuse.deltas=FALSE,
                            alpha.k=default.alpha.dtl,
-                           alpha.combine=TRUE,
                            cp.l=default.cp.l.dtl,
                            cp.u=default.cp.u.dtl,
                            n.min=default.nmin.dtl,
                            n.max=default.nmax.dtl,
                            power=default.power.dtl,
-                           rho.vec=default.cor.dtl,
-                           working.outs=NULL,
-                           fix.n=FALSE
+                           working.outs=NULL
                     )
 {
   n.init <- ceiling(n.min+(n.max-n.min)/2)
@@ -720,16 +736,33 @@ findDTL <- function(nsims=default.nsims.dtl,
     warning("No uninteresting treatment effects delta0 supplied. Using delta0=-1000, for all outcomes.", call. = FALSE)
     delta0 <- rep(-1000, K)
   }
-  if(is.null(rho.vec)){
-    warning("No correlations supplied. Using rho=0.1 for all correlations.", call. = FALSE)
-    rho.vec <- rep(0.1, times=sum(1:(K-1)))
+  if(is.null(corr.scalar) & is.null(corr.mat)){
+    stop("Supply either correlation matrix (corr.mat) with 1's on the diagonal, or a single shared value for correlation (corr.scalar).", call. = FALSE)
   }
-  if(is.null(vars)){
-    stop("Either no outcome variance (vars) supplied. Supply at least one value (to be used for all outcomes) or a vector of K values.", call. = FALSE)
+  if(exists("corr.mat")){
+    if(any(!is.matrix(corr.mat), dim(corr.mat)!=c(K, K), diag(corr.mat)!=rep(1, K))){
+      stop("corr.mat must be a K-dimensional square matrix with 1's on the diagonal")
+    }
   }
   if(length(vars)==1){
     warning("Only one outcome variance (vars) supplied. Using this value for all outcomes.", call. = FALSE)
     vars <- rep(vars, K)
+  }
+  # if(is.null(rho.vec)){
+  #   warning("No correlations supplied. Using rho=0.1 for all correlations.", call. = FALSE)
+  #   rho.vec <- rep(0.1, times=sum(1:(K-1)))
+  # }
+  # if(is.null(rho.vec)){
+  #   stop("No correlations supplied. Supply at least one correlation value (which will be repeated) or a matrix.", call. = FALSE)
+  # }
+  # if(length(rho.vec)==1 & K>2){
+  #   warning("Single value supplied for correlation rho.vec. Using supplied value for all correlations", call=F)
+  #   rho.vec <- rep(rho.vec, sum(1:(K-1)))
+  # }
+  if(exists("corr.scalar")){
+    warning("Single value supplied for correlation (corr.scalar) Using supplied value for all correlations", call=F)
+    corr.mat <- matrix(corr.scalar, ncol=K, nrow=K)
+    diag(corr.mat) <- 1
   }
   if(is.null(working.outs)){
     warning("Indices of working outcomes not supplied. Taking indices of working outcomes as outcomes 1 to m.", call. = FALSE)
@@ -742,18 +775,10 @@ findDTL <- function(nsims=default.nsims.dtl,
   if(Kmax < m){
     stop("Maxmimum number of outcomes allowed in stage 2, max.outcomes[2], must be greater than or equal to the number of outcomes required to show promise, m", call=F)
   }
-  if(length(rho.vec)!=1 & length(rho.vec)!=sum(1:(K-1))){
-    stop("The number of correlation terms must be equal to 1 (in which case it is equal across all pairs of outcomes) or equal to the number of pairs of outcomes",
-         call.=FALSE)
-  }
-  if(length(rho.vec)==1 & K>2){
-    warning("Single value supplied for correlation rho.vec. Using supplied value for all correlations", call=F)
-    rho.vec <- rep(rho.vec, sum(1:(K-1)))
-  }
-  if(alpha.combine==TRUE & length(alpha.k)>1){
-    stop("When alpha.combine is set to TRUE, a single overall alpha.k is required, not a vector.", call=F)
-  }
-
+  # if(length(rho.vec)!=1 & length(rho.vec)!=sum(1:(K-1))){
+  #   stop("The number of correlation terms must be equal to 1 (in which case it is equal across all pairs of outcomes) or equal to the number of pairs of outcomes",
+  #        call.=FALSE)
+  # }
   if(reuse.deltas==TRUE){
     # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
     # !!! They are used to obtain the power, which is found given outcome effects equal to delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
@@ -791,7 +816,7 @@ findDTL <- function(nsims=default.nsims.dtl,
 
 
   J <- 2
-  cov.mat <- createCovMat(J.=J, K.=K, rho.vec.=rho.vec)
+  cov.mat <- createCovMat(J.=J, K.=K, corr.mat=corr.mat)
   #set.seed(seed)
   ts.global.null <- mvtnorm::rmvnorm(nsims, mean=rep(0, J*K), sigma = cov.mat)
   # Find optimal final bounds for an initial n under the global null, using drop the loser design, and find the type I error at these bounds:
@@ -909,7 +934,7 @@ findDTL <- function(nsims=default.nsims.dtl,
   ess.h1.dtl <- final.pwr$pet*final.n.stage + (1-final.pwr$pet)*2*final.n.stage
 
   # Find sample size with correct power:
-  denom <-  vars
+  #denom <-  vars
   lfc.effects <- delta0
   lfc.effects[working.outs] <- delta1[working.outs]
 
@@ -976,13 +1001,14 @@ findDTL <- function(nsims=default.nsims.dtl,
   names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power", paste("f.", 1:K, sep=""), paste("e.", 1:K, sep=""))
   # Shared results:
   #if(reuse.deltas==TRUE){
-    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, sum(alpha.k), power, t(delta0), t(delta1), t(lfc.effects), rho.vec[1], t(vars))
-    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", "alpha", "req.power", paste("d0.", 1:K, sep=""), paste("d1.", 1:K, sep=""), paste("dbeta.", 1:K, sep=""),   "cor",  paste("var", 1:K, sep=""))
+    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, sum(alpha.k), power, t(delta0), t(delta1), t(lfc.effects), t(vars))
+    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", "alpha", "req.power", paste("d0.", 1:K, sep=""), paste("d1.", 1:K, sep=""), paste("dbeta.", 1:K, sep=""), paste("var", 1:K, sep=""))
   #}else{
   #  des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1], vars) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
   #  colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor",  paste("var", 1:K, sep=""))
   #}
   output <- list(input=des.chars,
+                 input.cor=corr.mat,
                  results=design.results)
   #paths=rbind(final.pwr$paths, pwr.nodrop.output$paths)
   #cp=pwr.output$cp
