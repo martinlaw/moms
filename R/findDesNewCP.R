@@ -739,7 +739,7 @@ findDTL <- function(nsims=default.nsims.dtl,
   if(is.null(corr.scalar) & is.null(corr.mat)){
     stop("Supply either correlation matrix (corr.mat) with 1's on the diagonal, or a single shared value for correlation (corr.scalar).", call. = FALSE)
   }
-  if(exists("corr.mat")){
+  if(!is.null(corr.mat)){
     if(any(!is.matrix(corr.mat), dim(corr.mat)!=c(K, K), diag(corr.mat)!=rep(1, K))){
       stop("corr.mat must be a K-dimensional square matrix with 1's on the diagonal")
     }
@@ -759,10 +759,14 @@ findDTL <- function(nsims=default.nsims.dtl,
   #   warning("Single value supplied for correlation rho.vec. Using supplied value for all correlations", call=F)
   #   rho.vec <- rep(rho.vec, sum(1:(K-1)))
   # }
-  if(exists("corr.scalar")){
-    warning("Single value supplied for correlation (corr.scalar) Using supplied value for all correlations", call=F)
-    corr.mat <- matrix(corr.scalar, ncol=K, nrow=K)
-    diag(corr.mat) <- 1
+  if(!is.null(corr.scalar)){
+    if(length(corr.scalar)==1){
+      warning("Single value supplied for correlation (corr.scalar) Using supplied value for all correlations", call.=F)
+      corr.mat <- matrix(corr.scalar, ncol=K, nrow=K)
+      diag(corr.mat) <- 1
+    }else{
+      stop("Supply either a single value for correlation (using corr.scalar) or a K-dimensional square matrix with 1's on the diagonal (corr.mat)")
+    }
   }
   if(is.null(working.outs)){
     warning("Indices of working outcomes not supplied. Taking indices of working outcomes as outcomes 1 to m.", call. = FALSE)
