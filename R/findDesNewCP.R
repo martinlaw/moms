@@ -706,8 +706,8 @@ findDTL <- function(nsims=default.nsims.dtl,
                            power=default.power.dtl,
                            rho.vec=default.cor.dtl,
                            working.outs=NULL,
-                           fix.n=FALSE,
-                           display.lookup=TRUE)
+                           fix.n=FALSE
+                    )
 {
   n.init <- ceiling(n.min+(n.max-n.min)/2)
 
@@ -756,32 +756,37 @@ findDTL <- function(nsims=default.nsims.dtl,
 
   if(reuse.deltas==TRUE){
     # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
-    # !!! They are used to obtain the power, which is found given outcome effects equal to  delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
-    if(length(delta0)==1){
-      delta0 <- rep(delta0, 2)
+    # !!! They are used to obtain the power, which is found given outcome effects equal to delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
+    if(length(delta0)>1 | length(delta0)>1){
+      stop("reuse.deltas set to TRUE, so single values of delta0 and delta1 should be supplied.")
     }
-    if(length(delta1)==1){
-      delta1 <- rep(delta1, 2)
-    }
-    return.delta0 <- delta0
-    return.delta1 <- delta1
-    rm(delta0, delta1)
-    delta0 <- rep(return.delta0[2], K)
-    delta1 <- rep(return.delta1[2], K)
-    delta0[working.outs] <- return.delta0[1]
-    delta1[working.outs] <- return.delta1[1]
-    if(K>2){
-      warning("reuse.deltas set to TRUE: As K>2, will take delta1[1] as anticipated effect size for outcomes 1 to m, and \n delta0[2] as anticipated effect size for outcomes m+1 to K")
-    }
+    # if(length(delta0)==1){
+    #   delta0 <- rep(delta0, 2)
+    # }
+    # if(length(delta1)==1){
+    #   delta1 <- rep(delta1, 2)
+    # }
+    # return.delta0 <- delta0
+    # return.delta1 <- delta1
+    # rm(delta0, delta1)
+    # delta0 <- rep(return.delta0[2], K)
+    # delta1 <- rep(return.delta1[2], K)
+    # delta0[working.outs] <- return.delta0[1]
+    # delta1[working.outs] <- return.delta1[1]
+    # if(K>2){
+    #   warning("reuse.deltas set to TRUE: As K>2, will take delta1[1] as anticipated effect size for outcomes 1 to m, and \n delta0[2] as anticipated effect size for outcomes m+1 to K")
+    # }
+    delta0 <- rep(delta0, K)
+    delta1 <- rep(delta1, K)
     if(!is.null(delta.true)){
-      means.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
+      delta.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
       if(K>2){
-        warning("reuse.deltas set to TRUE: As K>2, will take delta.true[1] as true delta for all working outcomes (i.e. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (i.e. m+1 to K.")
+        warning("reuse.deltas set to TRUE: As K>2, will take delta.true[1] as true delta for all working outcomes (e.g. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (e.g. m+1 to K.")
       }
     }
   }
   if(length(vars)!=K | length(delta0)!=K | length(delta1)!=K){
-    stop("The arguments vars, delta0 and delta1 must all have length equal to the number of outcomes, max.outcomes[1]", call.=FALSE)
+    stop("The arguments vars, delta0 and delta1 must all have length equal to the number of outcomes K", call.=FALSE)
   }
 
 
@@ -910,7 +915,7 @@ findDTL <- function(nsims=default.nsims.dtl,
 
   #### True delta ####
   if(!is.null(delta.true)){
-    nrows <- nrow(means.true)
+    nrows <- nrow(delta.true)
     true.results.list <- vector("list", nrows)
     for(i in 1:nrows){
       true.results.list[[i]] <- unlist(findR(bounds=final.r.k,
@@ -924,19 +929,19 @@ findDTL <- function(nsims=default.nsims.dtl,
                                              working.outs.=working.outs,
                                              vars.=vars,
                                              delta1.=delta1,
-                                             delta.true.=means.true[i,],
+                                             delta.true.=delta.true[i,],
                                              alpha.k.=alpha.k,
                                              cp.l.=cp.l,
                                              cp.u.=cp.u))
-      tau.true.current <- means.true[i, ] * sqrt(information.final)
+      tau.true.current <- delta.true[i, ] * sqrt(information.final)
       ts.true.current <-  sweep(ts.global.null[, (K+1):(2*K)], 2, tau.true.current, "+")
     }
     true.results.mat <- do.call(rbind, true.results.list)
-    dtl.true <- data.frame(true.results.mat, delta.true, means.true)
+    dtl.true <- data.frame(true.results.mat, delta.true, delta.true)
     dtl.true$ess <- final.n.stage*dtl.true$pet + J*final.n.stage*(1-dtl.true$pet)
     dtl.true$enm.total <- dtl.true$enm.pp * final.n.stage
     output.true <- dtl.true
-    colnames(output.true) <- c("prob.reject", "pet", "enm.pp", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(means.true), sep=""), "ess", "enm")
+    colnames(output.true) <- c("prob.reject", "pet", "enm.pp", "mu.working", "mu.nonworking", paste("mu.", 1:ncol(delta.true), sep=""), "ess", "enm")
   }
 
   # Obtain interim bounds:
@@ -950,15 +955,7 @@ findDTL <- function(nsims=default.nsims.dtl,
                                 vars=vars,
                                 z.alpha=final.r.k,
                                 d.1=delta1)
- # Create lookup table:
-cp.vec <- seq(from=0, to=1, by=0.01)
-lookup.tab <- sapply(X=cp.vec, FUN=function(x) {findDTLbounds(cp = x,
-                                                n.stage = final.n.stage,
-                                                vars=vars,
-                                                z.alpha=final.r.k,
-                                                d.1=delta1)})
-lookup.tab <- cbind(cp.vec, t(lookup.tab))
-colnames(lookup.tab) <- c("cp", paste("k", 1:K, sep=""))
+
 
 #### output  ####
   # Collate results for output:
@@ -978,20 +975,17 @@ colnames(lookup.tab) <- c("cp", paste("k", 1:K, sep=""))
   design.results <- data.frame(final.bounds, final.n.vec, final.N.vec, ess.h0, ess.h1, enm.pp.h0, enm.pp.h1, enm.tot.h0, enm.tot.h1, typeIerr.total.c, power.c, t(int.bounds.l), t(int.bounds.u))
   names(design.results) <- c("r.k", "n", "N", "ESS0", "ESS1", "ENM.pp.0", "ENM.pp.1", "ENM0", "ENM1", "typeIerr", "power", paste("f.", 1:K, sep=""), paste("e.", 1:K, sep=""))
   # Shared results:
-  if(reuse.deltas==TRUE){
-    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(return.delta0), t(return.delta1), sum(alpha.k), power,  rho.vec[1])
-    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "cor")
-  }else{
-    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1]) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
-    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor")
-  }
+  #if(reuse.deltas==TRUE){
+    des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, sum(alpha.k), power, t(delta0), t(delta1), t(lfc.effects), rho.vec[1], t(vars))
+    colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", "alpha", "req.power", paste("d0.", 1:K, sep=""), paste("d1.", 1:K, sep=""), paste("dbeta.", 1:K, sep=""),   "cor",  paste("var", 1:K, sep=""))
+  #}else{
+  #  des.chars <- data.frame(K, Kmax, m, cp.l, cp.u, t(delta0), t(delta1), sum(alpha.k), power,  rho.vec[1], vars) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
+  #  colnames(des.chars) <- c("K", "Kmax", "m", "cp.l", "cp.u", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "cor",  paste("var", 1:K, sep=""))
+  #}
   output <- list(input=des.chars,
                  results=design.results)
   #paths=rbind(final.pwr$paths, pwr.nodrop.output$paths)
   #cp=pwr.output$cp
-  if(display.lookup==TRUE){
-    output$lookup <- lookup.tab
-  }
   if(!is.null(delta.true)){
     output$true.results=output.true
   }
@@ -1251,19 +1245,31 @@ findDTLbounds <- function(cp,
 #' @description  This function gives the interim decision for multi-outcome, two-stage drop-the-loser designs that declare trial success
 #' when a specified number of outcomes show promise.
 #' @export
-interimDecision <- function(findDTL.output, test.statistics){
-  # find CPs:
-  lookup.tab <- findDTL.output$lookup
+interimDecision <- function(findDTL.output,
+                            test.statistics,
+                            return.lookup=FALSE){
+  K <- findDTL.output$input$K
+  # Create lookup table:
+  cp.vec <- seq(from=0, to=1, by=0.01)
+  vars <-  as.numeric(findDTL.output$input[, grep(pattern = "var", names(x4$input))])
+  delta1.vec <- as.numeric(findDTL.output$input[, grep(pattern = "d1", names(x4$input))])
+  lookup.tab <- sapply(X=cp.vec, simplify = TRUE, FUN=function(x) {findDTLbounds(cp = x,
+                                                                n.stage = findDTL.output$results$N,
+                                                                vars=vars,
+                                                                z.alpha=findDTL.output$results$r.k,
+                                                                d.1=delta1.vec)})
+  lookup.tab <- cbind(cp.vec, t(lookup.tab))
+  colnames(lookup.tab) <- c("cp", paste("k", 1:K, sep=""))
   tab.subset <- lookup.tab[,-1]
   abs.diff <- abs(sweep(tab.subset, 2, test.statistics))
   cp.index <- apply(abs.diff, 2, which.min)
   cps <- lookup.tab[cp.index, "cp"]
   cps <- data.frame(t(cps))
-  names(cps) <- paste("CP.k", 1:findDTL.output$input$K, sep="")
+  names(cps) <- paste("CP.k", 1:K, sep="")
 
   # Does trial end at interim?
   below.cp.l <- cps<findDTL.output$input$cp.l
-  stop.futility <- sum(below.cp.l)>=(findDTL.output$input$K - findDTL.output$input$m + 1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
+  stop.futility <- sum(below.cp.l)>=(K - findDTL.output$input$m + 1) # Stop for futility if K-m+1 outcomes are below CP_L at the interim.
   above.cp.u <- cps>findDTL.output$input$cp.u
   stop.efficacy <- sum(above.cp.u)>=findDTL.output$input$m
 
@@ -1281,7 +1287,10 @@ interimDecision <- function(findDTL.output, test.statistics){
     decision <- "Stop trial for efficacy"
   }
   print(decision, q=F)
-  return(list(decision=decision,
-              cp=cps)
-  )
+  output <- list(decision=decision,
+                 cp=cps)
+  if(return.lookup==TRUE){
+    output$lookup <- lookup.tab
+  }
+  return(output)
 }
