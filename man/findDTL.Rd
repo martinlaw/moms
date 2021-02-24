@@ -73,7 +73,7 @@ if delta.true is used, an additional list element is returned, true.results, con
 \examples{
 findDTL(K=4, Kmax=3, m=2, vars=c(1, 1.01, 2, 1.5), delta0=0.1, delta1=0.4, alpha.k=0.05, cp.l=0.3, cp.u=0.95, n.min=10, n.max=40, power=0.8, corr.scalar=0.4, working.outs=c(1,2))
 
-m1 <- matrix(NA, n, n)
+m1 <- matrix(NA, 4, 4)
 m1[lower.tri(m1, diag=F)] <- vec
 m1 <- t(m1)
 m1[lower.tri(m1, diag=F)] <- vec

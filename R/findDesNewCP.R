@@ -277,7 +277,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
 
 
   J <- 2
-  cov.mat <- createCovMat(J.=J, K.=K, rho.vec.=rho.vec)
+  cov.mat <- createCovMatOld(J.=J, K.=K, rho.vec.=rho.vec)
   #set.seed(seed)
   ts.global.null <- mvtnorm::rmvnorm(nsims, mean=rep(0, J*K), sigma = cov.mat)
   # Find optimal final bounds for an initial n under the global null, using drop the loser design, and find the type I error at these bounds:
@@ -710,7 +710,7 @@ p.reject.single.stage <- function(bounds,
 #' @examples
 #' findDTL(K=4, Kmax=3, m=2, vars=c(1, 1.01, 2, 1.5), delta0=0.1, delta1=0.4, alpha.k=0.05, cp.l=0.3, cp.u=0.95, n.min=10, n.max=40, power=0.8, corr.scalar=0.4, working.outs=c(1,2))
 #'
-#' m1 <- matrix(NA, n, n)
+#' m1 <- matrix(NA, 4, 4)
 #' m1[lower.tri(m1, diag=F)] <- vec
 #' m1 <- t(m1)
 #' m1[lower.tri(m1, diag=F)] <- vec
@@ -1283,7 +1283,17 @@ findDTLbounds <- function(cp,
 #'
 #' @description  This function gives the interim decision for multi-outcome, two-stage drop-the-loser designs that declare trial success
 #' when a specified number of outcomes show promise.
-#' @return If return.lookup==TRUE, the function will return a third list element, lookup, which is a lookup table containing the test statistics for each outcome that correspond to a range of CP values.
+#' @param findDTL.output The output from a call to findDTL.
+#' @param test.statistics A vector of observed interim test statistics
+#' @param return.lookup Logical. Will return a lookup table if TRUE. Default is FALSE.
+#' @return
+#' Returns a list containing at least two elements. The first element, decision, is a statement regarding whether
+#' the trial should proceed, and if so, what outcomes should be retained for the second stage. The second
+#' element, cp, is a vector of the conditional power values for each outcome.
+#' If return.lookup==TRUE, the function will return a third list element, lookup, which is a lookup table containing the test statistics for each outcome that correspond to a range of CP values.
+#' @examples
+#' dtl.out <- findDTL(K=4, Kmax=3, m=2, vars=c(1, 1.01, 2, 1.5), delta0=0.1, delta1=0.4, alpha.k=0.05, cp.l=0.3, cp.u=0.95, n.min=10, n.max=40, power=0.8, corr.scalar=0.4, working.outs=c(1,2))
+#' interimDecision(dtl.out, c(0.32, -1.20, 2.01, 1.45))
 #' @export
 interimDecision <- function(findDTL.output,
                             test.statistics,
@@ -1291,8 +1301,8 @@ interimDecision <- function(findDTL.output,
   K <- findDTL.output$input$K
   # Create lookup table:
   cp.vec <- seq(from=0, to=1, by=0.01)
-  vars <-  as.numeric(findDTL.output$input[, grep(pattern = "var", names(x4$input))])
-  delta1.vec <- as.numeric(findDTL.output$input[, grep(pattern = "d1", names(x4$input))])
+  vars <-  as.numeric(findDTL.output$input[, grep(pattern = "var", names(findDTL.output$input))])
+  delta1.vec <- as.numeric(findDTL.output$input[, grep(pattern = "d1", names(findDTL.output$input))])
   lookup.tab <- sapply(X=cp.vec, simplify = TRUE, FUN=function(x) {findDTLbounds(cp = x,
                                                                 n.stage = findDTL.output$results$N,
                                                                 vars=vars,
