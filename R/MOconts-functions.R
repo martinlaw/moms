@@ -23,7 +23,7 @@
                       return.ts=FALSE
                       )
   {
-  #### Warnings, checks: ####
+  #### Warnings, checks:
     if(is.null(delta0)){
       warning("No uninteresting treatment effects delta0 supplied. Using delta0=0, for all outcomes.", call. = FALSE)
       delta0 <- rep(0, K)
@@ -100,7 +100,7 @@
     if(length(vars)!=K) stop ("Number of outcome variances, i.e. vars, should be equal to K (the number of outcomes)", call. = FALSE)
 
 
-  ############### Covariance matrix ######################
+  ############### Covariance matrix
     #outcome_covars <- rep(rho.scalar, sum(1:(K-1)))
     # ^^^ All covariances in one vector. Begin with covariances of the first outcome,
     # i.e. p12, p13,...,p1k, then second outcome, i.e. p23, p24,...p2k, etc.
@@ -129,7 +129,7 @@
       ts.composite[,i] <- rowSums(ts[,(1+(i-1)*K):(i*K)])
     }
 
-    ############### Optimisation ###################
+    ############### Optimisation
   # FIND THE SET OF BOUNDARIES THAT MINIMISES (probability of rejection - alpha)^2
   # NOTE: In composite function, we use method="Brent", which allows limits and one-dimensional optimisation.
     #browser()
@@ -214,7 +214,7 @@
 
 
 
-  ############### Obtain power ############
+  ############### Obtain power
   # Define this as the probability of rejecting the null, even by incorrectly concluding that the treatment has an effect on some outcome.
   # Can use LFC or set the number and index of working treatments in the initial arguments.
     pwr.ess <- list(0, NA, NA, NA)
@@ -256,7 +256,7 @@
     }
     n.final <- n.vec[i]
 
-  ############### Obtain composite power  ################
+  ############### Obtain composite power
   # Now find the composite power:
     pwr.ess.composite <- list(0, NA, NA, NA)
     i <- 0
@@ -336,7 +336,7 @@
     ess0.c <- n.final.composite*typeIerr.composite$expd.no.stages
 
 
-  ############### True treatment effects =/= delta0 OR delta1 #################
+  ############### True treatment effects =/= delta0 OR delta1
 
     createTrueTSFindpReject <- function(mu.matrix,
                                         ts.,
@@ -527,9 +527,7 @@
     class(to.return) <- "moms"
     return(to.return)
   } # end of overall function
-  #### End of function ####
-
-  #### P(rejection) ####
+  #### End of function
 
   ##### new pRejectFast, with shared constant C:
   pRejectFastCommonC <- function(const,
@@ -744,7 +742,6 @@
                       power=default.power,
                       delta0=default.delta0,
                       delta1=default.delta1,
-                      reuse.deltas=TRUE,
                       delta.true=NULL,
                       reuse.true.deltas=TRUE,
                       vars.true=NULL,
@@ -800,29 +797,42 @@
       warning("Number of outcomes required to show promise, m, not given. Using number of working treatments as treatments.", call. = FALSE)
       m <- length(working.outs)
     }
-    if(reuse.deltas==TRUE){
-      # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
-      # !!! They are used to obtain the power, which is found given outcome effects equal to  delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
-      if(length(delta0)==1){
-        delta0 <- rep(delta0, 2)
-      }
-      if(length(delta1)==1){
-        delta1 <- rep(delta1, 2)
-      }
-      return.delta0 <- delta0
-      return.delta1 <- delta1
-      rm(delta0, delta1)
-      delta0 <- rep(return.delta0[2], K)
-      delta1 <- rep(return.delta1[2], K)
-      delta0[working.outs] <- return.delta0[1]
-      delta1[working.outs] <- return.delta1[1]
-      if(K>2){
-        warning("reuse.deltas set to TRUE: If K>2, will take delta0[1] as delta0 for all working outcomes and delta0[2] as delta0 for all non-working outcomes. Ditto delta1")
-      }
-
-    }else{
+    # if(reuse.deltas==TRUE){
+    #   # !!! IMPORTANT: Currently, the only delta values used are delta1[1] and delta0[2].
+    #   # !!! They are used to obtain the power, which is found given outcome effects equal to  delta1[1] for the first m outcomes and equal to delta0[2] for the remaining K-m outcomes.
+    #   if(length(delta0)==1){
+    #     delta0 <- rep(delta0, 2)
+    #   }
+    #   if(length(delta1)==1){
+    #     delta1 <- rep(delta1, 2)
+    #   }
+    #   return.delta0 <- delta0
+    #   return.delta1 <- delta1
+    #   rm(delta0, delta1)
+    #   delta0 <- rep(return.delta0[2], K)
+    #   delta1 <- rep(return.delta1[2], K)
+    #   delta0[working.outs] <- return.delta0[1]
+    #   delta1[working.outs] <- return.delta1[1]
+    #   if(K>2){
+    #     warning("reuse.deltas set to TRUE: If K>2, will take delta0[1] as delta0 for all working outcomes and delta0[2] as delta0 for all non-working outcomes. Ditto delta1")
+    #   }
+    #
+    # }else{
+    #   if(!is.null(delta.true)){
+    #     warning("CAUTION: reuse.deltas set to FALSE, but values supplied for true delta. This could cause problems re. delta.true and means.true")
+    #   }
+    # }
+    if(length(delta0)==1 & length(delta1)==1){
+      delta0 <- rep(delta0, K)
+      delta1 <- rep(delta1, K)
+      warning("Single values of delta0 and delta1 supplied. Using these values for all outcomes", call. = FALSE)
       if(!is.null(delta.true)){
-        warning("CAUTION: reuse.deltas set to FALSE, but values supplied for true delta. This could cause problems re. delta.true and means.true")
+        if(ncol(delta.true)==2){
+          delta.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
+          if(K>2){
+            warning("As K>2 and delta.true contains only two columns, will take delta.true[1] as true delta for all working outcomes (e.g. 1 to m) and \n delta.true[2] as true delta for all non-working outcomes (e.g. m+1 to K).", call. = F)
+          }
+        }
       }
     }
 
@@ -830,7 +840,7 @@
       if(reuse.true.deltas==TRUE){
         means.true <- t(apply(delta.true, 1, recycleDeltas, working.outs.=working.outs, K.=K))
         if(K>2){
-          warning("reuse.deltas set to TRUE: If K>2, will take delta.true[1] as true delta for all working outcomes and delta.true[2] as true delta for all non-working outcomes.")
+          warning("reuse.true.deltas set to TRUE: If K>2, will take delta.true[1] as true delta for all working outcomes and delta.true[2] as true delta for all non-working outcomes.")
         }
       }else{
         means.true <- delta.true
@@ -913,6 +923,7 @@
       working.outs.idx <- working.outs
     }
     means.power[working.outs.idx] <- delta1[working.outs.idx]
+    delta.beta <- means.power
     means.power <- rep(means.power, times=J)
     # Need to multiply each outcome's trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
     denom <-  rep(vars, times=J)
@@ -1015,13 +1026,13 @@
     }  # end of if statement
 
     # Shared design characteristics:
-    if(reuse.deltas==TRUE){
-      des.chars <- data.frame(K, m, J, t(return.delta0), t(return.delta1), alpha, power, wang.delta)
-      colnames(des.chars) <- c("K", "m", "J", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "WangDelta")
-    }else{
-      des.chars <- data.frame(K, m, J, t(delta0), t(delta1), alpha, power, wang.delta) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
-      colnames(des.chars) <- c("K", "m", "J", paste("delta0.k", 1:K, sep=""), paste("delta1.k", 1:K, sep=""), "alpha", "req.power", "WangDelta")
-    }
+    # if(reuse.deltas==TRUE){
+    #   des.chars <- data.frame(K, m, J, t(return.delta0), t(return.delta1), alpha, power, wang.delta)
+    #   colnames(des.chars) <- c("K", "m", "J", "delta0.1", "delta0.2", "delta1.1", "delta1.2", "alpha", "req.power", "WangDelta")
+    # }else{
+      des.chars <- data.frame(K, m, J, t(delta0), t(delta1), t(delta.beta), alpha, power, wang.delta) # This includes all delta0 and delta1 values (use this if specifying separate delta0/1 values for each outcome)
+      colnames(des.chars) <- c("K", "m", "J", paste("d0.", 1:K, sep=""), paste("d1.k", 1:K, sep=""),  paste("dbeta.", 1:K, sep=""), "alpha", "req.power", "WangDelta")
+    #}
 
     final.n.stage <- n.final
     N <- J*final.n.stage
