@@ -23,11 +23,6 @@
                       return.ts=FALSE
                       )
   {
-    recycleDeltas <- function(vec, working.outs., K.){
-      full.delta.vec <- rep(vec[2], K.)
-      full.delta.vec[working.outs.] <- vec[1]
-      return(full.delta.vec)
-    }
   #### Warnings, checks: ####
     if(is.null(delta0)){
       warning("No uninteresting treatment effects delta0 supplied. Using delta0=0, for all outcomes.", call. = FALSE)
@@ -103,198 +98,7 @@
                                                    call. = FALSE)
     if(length(delta1)!=K) stop ("Number of supplied treatment effects, i.e. delta1, should be equal to K, the number of outcomes", call. = FALSE)
     if(length(vars)!=K) stop ("Number of outcome variances, i.e. vars, should be equal to K (the number of outcomes)", call. = FALSE)
-  #### P(rejection) ####
 
-    ##### new pRejectFast, with shared constant C:
-    pRejectFastCommonC <- function(const,
-                                   J=J,
-                                   K=K,
-                                   m=m,
-                                   wang.delta,
-                                   ts,
-                                   nsims,
-                                   prob.only=TRUE,
-                                   alpha=alpha,
-                                   composite=FALSE
-    ){
-      e.vec <-  const*((1:J)/J)^(wang.delta-0.5)
-      f.vec <- -e.vec
-      f.vec[length(f.vec)] <- e.vec[length(e.vec)]
-      if(J==1){
-        if(composite==FALSE) {
-          go.overall <- colSums(t(ts) > e.vec)>=m
-        }else{
-          go.overall <- ts > e.vec
-        }
-        prob.reject <- sum(go.overall)/nsims
-        minimise.prob <- abs(prob.reject - alpha)
-        expd.no.stages <- 1
-      } else { # ie if J!=1:
-        if(composite==FALSE){
-          nogo.overall <- vector("list", J)
-          go.overall <- vector("list", J)
-          first.m.outs.exceed.e <- vector("list", J)
-          other.combn.exceed.e <- vector("list", J)
-          for(j in 1:J){
-            nogo.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) < f.vec[j])>=(K-m+1)
-            go.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) > e.vec[j])>=m
-            first.m.outs.exceed.e[[j]] <- colSums(t(ts[,(1+(j-1)*K):(m+(j-1)*K)]) > e.vec[j])==m
-            other.combn.exceed.e[[j]] <- go.overall[[j]]==TRUE & first.m.outs.exceed.e[[j]]==FALSE
-          }
-          # Are m or more boundaries crossed? Row=simulation, col=stage
-          nogo.trial.binary <- t(do.call(rbind, nogo.overall))
-          go.trial.binary <- t(do.call(rbind, go.overall))
-          first.m.outs.exceed.e <- t(do.call(rbind, first.m.outs.exceed.e))
-          other.combn.exceed.e <-  t(do.call(rbind, other.combn.exceed.e))
-        } else{ # if composite==TRUE
-          # Only J boundaries for composite:
-          nogo.trial.binary <-  t(t(ts) < f.vec)
-          go.trial.binary <- t(t(ts) > e.vec)
-         # browser()
-        }
-        # The first stage at which a nogo decision is made (and analogous for go):
-        # Add extra column of 1's so that there is always some maximum even if NOGO boundary is never crossed:
-        nogo.trial.binary.plus <- cbind(nogo.trial.binary, 1)
-        # Add extra column of 1's so that there is always some maximum even if GO boundary is never crossed:
-        go.trial.binary.plus <- cbind(go.trial.binary, 1)
-        first.nogo.stage <- Rfast::rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
-        first.go.stage <- Rfast::rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
-        first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
-        mode(first.stop.stage) <- "numeric"
-        # Does the trial make a nogo or a go decision first?
-        # Final decision: 1=nogo, 2=go
-        final.decision <- Rfast::rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
-        prob.reject <- sum(final.decision==2)/nsims
-        minimise.prob <- abs(prob.reject - alpha)^2 # 29th Jul: added square.
-        stop.stage <- Rfast::rowMins(first.stop.stage, value=TRUE) #Rfast
-        expd.no.stages <- sum(stop.stage)/nsims
-      } # end of if J==1 else
-      if(prob.only==TRUE){
-        return(minimise.prob)
-      } else{
-        if(composite==FALSE & J!=1){
-          go.decision.index <- which(final.decision==2)
-          correct.go <- rep(NA, length(go.decision.index))
-          incorrect.go <- rep(NA, length(go.decision.index))
-          for(i in 1:length(go.decision.index)){
-            correct.go[i] <- first.m.outs.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
-            incorrect.go[i] <- other.combn.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
-          }
-          prob.correct.go <- sum(correct.go)/nsims
-          prob.incorrect.go <- sum(incorrect.go)/nsims
-        }else{
-          prob.correct.go <- NA
-          prob.incorrect.go <- NA
-        }
-        return(list(prob.reject=prob.reject,
-                    expd.no.stages=expd.no.stages,
-                    f.vec=f.vec,
-                    e.vec=e.vec,
-                    prob.correct.go=prob.correct.go,
-                    prob.incorrect.go=prob.incorrect.go)
-        )
-      }
-    } # end of function
-
-  trueReject <- function(
-      J=J,
-      K=K,
-      m=m,
-      ts=ts,
-      nsims,
-      prob.only=FALSE,
-      alpha=alpha,
-      means.true=means.true,
-      vars.true=vars.true,
-      f.vec=pwr.ess$f.vec,
-      e.vec=pwr.ess$e.vec,
-      n.final=n.final,
-      composite=FALSE
-    ){
-      # Need test statistic for true effects:
-      means.true <- rep(means.true, times=J)
-      # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
-      denom <-  rep(vars.true, times=J)
-      numer <- rep((1:J)*n.final, each=K)
-      information <- numer/denom
-      tau.true <- means.true*sqrt(information)
-      ts.true <- sweep(ts, 2, tau.true, "+")   # Add the above tau vector to every row in the matrix ts
-      if(J==1){
-        if(composite==FALSE) {
-          go <- t(apply(ts.true, 1, function(x) x > e.vec))
-          go.overall <- apply(go, 1, function(x) sum(x)>=m)
-        } else{
-          ts.composite <- rowSums(ts.true)
-          go.overall <- ts.composite > e.vec
-        }
-        prob.reject <- sum(go.overall)/nsims
-        ess <- n.final
-      } else {
-      if(composite==FALSE){
-        nogo <- t(apply(ts.true, 1, function(x) x < f.vec))
-        go <- t(apply(ts.true, 1, function(x) x > e.vec))
-        nogo.overall <- vector("list", J)
-        go.overall <- vector("list", J)
-        for(j in 1:J){
-          # Subset to the K outcomes for stage j:
-          current.stage.nogo <- nogo[, (1+(j-1)*K):(j*K)]
-          current.stage.go <- go[, (1+(j-1)*K):(j*K)]
-          # Would the trial stop for either go or nogo at stage j?
-          nogo.overall[[j]] <- apply(current.stage.nogo, 1, function(x) sum(x)>=(K-m+1))
-          go.overall[[j]] <- apply(current.stage.go, 1, function(x) sum(x)>=m)
-        }
-        # Is a boundary crossed? Row=simulation, col=stage
-        nogo.trial.binary <- t(do.call(rbind, nogo.overall))
-        go.trial.binary <- t(do.call(rbind, go.overall))
-      } else {
-        # Sum the test statistics at each stage to form the composite test statistics
-        ts.composite <- matrix(NA, nrow=nsims, ncol=J)
-        for(i in 1:J){
-          ts.composite[,i] <- rowSums(ts.true[,(1+(i-1)*K):(i*K)])
-        }
-        nogo.trial.binary <- t(apply(ts.composite, 1, function(x) x < f.vec)) + 0
-        go.trial.binary <- t(apply(ts.composite, 1, function(x) x > e.vec)) + 0
-      }
-      # The first stage at which a nogo decision is made (and analogous for go):
-      first.nogo.stage <- apply(nogo.trial.binary, 1, function(x) min(which(x==1), Inf))
-      first.go.stage <- apply(go.trial.binary, 1, function(x) min(which(x==1), Inf))
-      first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
-      # Does the trial make a nogo or a go decision first?
-      # Final decision: 1=nogo, 2=go
-      final.decision <- apply(first.stop.stage, 1, which.min)
-      prob.reject <- sum(final.decision==2)/nsims
-      stop.stage <- apply(first.stop.stage, 1, min)
-      expd.no.stages <- sum(stop.stage)/nsims
-      ess <- expd.no.stages*n.final
-      #minimise.prob <- abs(prob.reject - alpha)
-      } # end of J==1 else
-      return(c(prob.reject, ess))
-    } # end of function
-
-    constToBounds <- function(const, J., wang.d){
-      e.vec <- const*((1:J.)/J.)^(wang.d-0.5)
-      f.vec <- -e.vec
-      f.vec[length(f.vec)] <-e.vec[length(e.vec)]
-      bounds <- list(e=e.vec, f=f.vec)
-      return(bounds)
-    }
-
-    createTrueTS <- function(ts., mu., vars., J., K., n., composite=FALSE){
-      mu.full.vec <- rep(mu., times=J.)
-      # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
-      denom <-  rep(vars., times=J.)
-      numer <- rep((1:J.)*n., each=K.)
-      info <- numer/denom
-      tau <- mu.full.vec*sqrt(info)
-      ts.true <- sweep(ts., 2, tau, "+")   # Add the above tau vector to every row in the matrix ts
-      if(composite){
-        ts.composite <- matrix(NA, nrow=nrow(ts.), ncol=J.)
-        for(i in 1:J.){ ts.composite[,i] <- rowSums(ts.true[, (1+(i-1)*K.):(i*K.)])
-        }
-        return(ts.composite)
-      }
-      return(ts.true)
-    }
 
   ############### Covariance matrix ######################
     #outcome_covars <- rep(rho.scalar, sum(1:(K-1)))
@@ -723,8 +527,200 @@
     class(to.return) <- "moms"
     return(to.return)
   } # end of overall function
-  #### End of main function ####
+  #### End of function ####
 
+  #### P(rejection) ####
+
+  ##### new pRejectFast, with shared constant C:
+  pRejectFastCommonC <- function(const,
+                                 J=J,
+                                 K=K,
+                                 m=m,
+                                 wang.delta,
+                                 ts,
+                                 nsims,
+                                 prob.only=TRUE,
+                                 alpha=alpha,
+                                 composite=FALSE
+  ){
+    e.vec <-  const*((1:J)/J)^(wang.delta-0.5)
+    f.vec <- -e.vec
+    f.vec[length(f.vec)] <- e.vec[length(e.vec)]
+    if(J==1){
+      if(composite==FALSE) {
+        go.overall <- colSums(t(ts) > e.vec)>=m
+      }else{
+        go.overall <- ts > e.vec
+      }
+      prob.reject <- sum(go.overall)/nsims
+      minimise.prob <- abs(prob.reject - alpha)
+      expd.no.stages <- 1
+    } else { # ie if J!=1:
+      if(composite==FALSE){
+        nogo.overall <- vector("list", J)
+        go.overall <- vector("list", J)
+        first.m.outs.exceed.e <- vector("list", J)
+        other.combn.exceed.e <- vector("list", J)
+        for(j in 1:J){
+          nogo.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) < f.vec[j])>=(K-m+1)
+          go.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) > e.vec[j])>=m
+          first.m.outs.exceed.e[[j]] <- colSums(t(ts[,(1+(j-1)*K):(m+(j-1)*K)]) > e.vec[j])==m
+          other.combn.exceed.e[[j]] <- go.overall[[j]]==TRUE & first.m.outs.exceed.e[[j]]==FALSE
+        }
+        # Are m or more boundaries crossed? Row=simulation, col=stage
+        nogo.trial.binary <- t(do.call(rbind, nogo.overall))
+        go.trial.binary <- t(do.call(rbind, go.overall))
+        first.m.outs.exceed.e <- t(do.call(rbind, first.m.outs.exceed.e))
+        other.combn.exceed.e <-  t(do.call(rbind, other.combn.exceed.e))
+      } else{ # if composite==TRUE
+        # Only J boundaries for composite:
+        nogo.trial.binary <-  t(t(ts) < f.vec)
+        go.trial.binary <- t(t(ts) > e.vec)
+        # browser()
+      }
+      # The first stage at which a nogo decision is made (and analogous for go):
+      # Add extra column of 1's so that there is always some maximum even if NOGO boundary is never crossed:
+      nogo.trial.binary.plus <- cbind(nogo.trial.binary, 1)
+      # Add extra column of 1's so that there is always some maximum even if GO boundary is never crossed:
+      go.trial.binary.plus <- cbind(go.trial.binary, 1)
+      first.nogo.stage <- Rfast::rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
+      first.go.stage <- Rfast::rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
+      first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
+      mode(first.stop.stage) <- "numeric"
+      # Does the trial make a nogo or a go decision first?
+      # Final decision: 1=nogo, 2=go
+      final.decision <- Rfast::rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
+      prob.reject <- sum(final.decision==2)/nsims
+      minimise.prob <- abs(prob.reject - alpha)^2 # 29th Jul: added square.
+      stop.stage <- Rfast::rowMins(first.stop.stage, value=TRUE) #Rfast
+      expd.no.stages <- sum(stop.stage)/nsims
+    } # end of if J==1 else
+    if(prob.only==TRUE){
+      return(minimise.prob)
+    } else{
+      if(composite==FALSE & J!=1){
+        go.decision.index <- which(final.decision==2)
+        correct.go <- rep(NA, length(go.decision.index))
+        incorrect.go <- rep(NA, length(go.decision.index))
+        for(i in 1:length(go.decision.index)){
+          correct.go[i] <- first.m.outs.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
+          incorrect.go[i] <- other.combn.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
+        }
+        prob.correct.go <- sum(correct.go)/nsims
+        prob.incorrect.go <- sum(incorrect.go)/nsims
+      }else{
+        prob.correct.go <- NA
+        prob.incorrect.go <- NA
+      }
+      return(list(prob.reject=prob.reject,
+                  expd.no.stages=expd.no.stages,
+                  f.vec=f.vec,
+                  e.vec=e.vec,
+                  prob.correct.go=prob.correct.go,
+                  prob.incorrect.go=prob.incorrect.go)
+      )
+    }
+  } # end of function
+
+  trueReject <- function(
+    J=J,
+    K=K,
+    m=m,
+    ts=ts,
+    nsims,
+    prob.only=FALSE,
+    alpha=alpha,
+    means.true=means.true,
+    vars.true=vars.true,
+    f.vec=pwr.ess$f.vec,
+    e.vec=pwr.ess$e.vec,
+    n.final=n.final,
+    composite=FALSE
+  ){
+    # Need test statistic for true effects:
+    means.true <- rep(means.true, times=J)
+    # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
+    denom <-  rep(vars.true, times=J)
+    numer <- rep((1:J)*n.final, each=K)
+    information <- numer/denom
+    tau.true <- means.true*sqrt(information)
+    ts.true <- sweep(ts, 2, tau.true, "+")   # Add the above tau vector to every row in the matrix ts
+    if(J==1){
+      if(composite==FALSE) {
+        go <- t(apply(ts.true, 1, function(x) x > e.vec))
+        go.overall <- apply(go, 1, function(x) sum(x)>=m)
+      } else{
+        ts.composite <- rowSums(ts.true)
+        go.overall <- ts.composite > e.vec
+      }
+      prob.reject <- sum(go.overall)/nsims
+      ess <- n.final
+    } else {
+      if(composite==FALSE){
+        nogo <- t(apply(ts.true, 1, function(x) x < f.vec))
+        go <- t(apply(ts.true, 1, function(x) x > e.vec))
+        nogo.overall <- vector("list", J)
+        go.overall <- vector("list", J)
+        for(j in 1:J){
+          # Subset to the K outcomes for stage j:
+          current.stage.nogo <- nogo[, (1+(j-1)*K):(j*K)]
+          current.stage.go <- go[, (1+(j-1)*K):(j*K)]
+          # Would the trial stop for either go or nogo at stage j?
+          nogo.overall[[j]] <- apply(current.stage.nogo, 1, function(x) sum(x)>=(K-m+1))
+          go.overall[[j]] <- apply(current.stage.go, 1, function(x) sum(x)>=m)
+        }
+        # Is a boundary crossed? Row=simulation, col=stage
+        nogo.trial.binary <- t(do.call(rbind, nogo.overall))
+        go.trial.binary <- t(do.call(rbind, go.overall))
+      } else {
+        # Sum the test statistics at each stage to form the composite test statistics
+        ts.composite <- matrix(NA, nrow=nsims, ncol=J)
+        for(i in 1:J){
+          ts.composite[,i] <- rowSums(ts.true[,(1+(i-1)*K):(i*K)])
+        }
+        nogo.trial.binary <- t(apply(ts.composite, 1, function(x) x < f.vec)) + 0
+        go.trial.binary <- t(apply(ts.composite, 1, function(x) x > e.vec)) + 0
+      }
+      # The first stage at which a nogo decision is made (and analogous for go):
+      first.nogo.stage <- apply(nogo.trial.binary, 1, function(x) min(which(x==1), Inf))
+      first.go.stage <- apply(go.trial.binary, 1, function(x) min(which(x==1), Inf))
+      first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
+      # Does the trial make a nogo or a go decision first?
+      # Final decision: 1=nogo, 2=go
+      final.decision <- apply(first.stop.stage, 1, which.min)
+      prob.reject <- sum(final.decision==2)/nsims
+      stop.stage <- apply(first.stop.stage, 1, min)
+      expd.no.stages <- sum(stop.stage)/nsims
+      ess <- expd.no.stages*n.final
+      #minimise.prob <- abs(prob.reject - alpha)
+    } # end of J==1 else
+    return(c(prob.reject, ess))
+  } # end of function
+
+  constToBounds <- function(const, J., wang.d){
+    e.vec <- const*((1:J.)/J.)^(wang.d-0.5)
+    f.vec <- -e.vec
+    f.vec[length(f.vec)] <-e.vec[length(e.vec)]
+    bounds <- list(e=e.vec, f=f.vec)
+    return(bounds)
+  }
+
+  createTrueTS <- function(ts., mu., vars., J., K., n., composite=FALSE){
+    mu.full.vec <- rep(mu., times=J.)
+    # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
+    denom <-  rep(vars., times=J.)
+    numer <- rep((1:J.)*n., each=K.)
+    info <- numer/denom
+    tau <- mu.full.vec*sqrt(info)
+    ts.true <- sweep(ts., 2, tau, "+")   # Add the above tau vector to every row in the matrix ts
+    if(composite){
+      ts.composite <- matrix(NA, nrow=nrow(ts.), ncol=J.)
+      for(i in 1:J.){ ts.composite[,i] <- rowSums(ts.true[, (1+(i-1)*K.):(i*K.)])
+      }
+      return(ts.composite)
+    }
+    return(ts.true)
+  }
 
   #' Find Multi-Outcome Multi-Stage Trials That Allow a General Number of Efficacious Outcomes
   #'
@@ -850,198 +846,7 @@
                                                    call. = FALSE)
     if(length(delta1)!=K) stop ("Number of supplied treatment effects, i.e. delta1, should be equal to K, the number of outcomes", call. = FALSE)
     if(length(vars)!=K) stop ("Number of outcome variances, i.e. vars, should be equal to K (the number of outcomes)", call. = FALSE)
-    #### P(rejection) ####
 
-    ##### new pRejectFast, with shared constant C:
-    pRejectFastCommonC <- function(const,
-                                   J=J,
-                                   K=K,
-                                   m=m,
-                                   wang.delta,
-                                   ts,
-                                   nsims,
-                                   prob.only=TRUE,
-                                   alpha=alpha,
-                                   composite=FALSE
-    ){
-      e.vec <-  const*((1:J)/J)^(wang.delta-0.5)
-      f.vec <- -e.vec
-      f.vec[length(f.vec)] <- e.vec[length(e.vec)]
-      if(J==1){
-        if(composite==FALSE) {
-          go.overall <- colSums(t(ts) > e.vec)>=m
-        }else{
-          go.overall <- ts > e.vec
-        }
-        prob.reject <- sum(go.overall)/nsims
-        minimise.prob <- abs(prob.reject - alpha)
-        expd.no.stages <- 1
-      } else { # ie if J!=1:
-        if(composite==FALSE){
-          nogo.overall <- vector("list", J)
-          go.overall <- vector("list", J)
-          first.m.outs.exceed.e <- vector("list", J)
-          other.combn.exceed.e <- vector("list", J)
-          for(j in 1:J){
-            nogo.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) < f.vec[j])>=(K-m+1)
-            go.overall[[j]] <- colSums(t(ts[,(1+(j-1)*K):(j*K)]) > e.vec[j])>=m
-            first.m.outs.exceed.e[[j]] <- colSums(t(ts[,(1+(j-1)*K):(m+(j-1)*K)]) > e.vec[j])==m
-            other.combn.exceed.e[[j]] <- go.overall[[j]]==TRUE & first.m.outs.exceed.e[[j]]==FALSE
-          }
-          # Are m or more boundaries crossed? Row=simulation, col=stage
-          nogo.trial.binary <- t(do.call(rbind, nogo.overall))
-          go.trial.binary <- t(do.call(rbind, go.overall))
-          first.m.outs.exceed.e <- t(do.call(rbind, first.m.outs.exceed.e))
-          other.combn.exceed.e <-  t(do.call(rbind, other.combn.exceed.e))
-        } else{ # if composite==TRUE
-          # Only J boundaries for composite:
-          nogo.trial.binary <-  t(t(ts) < f.vec)
-          go.trial.binary <- t(t(ts) > e.vec)
-          # browser()
-        }
-        # The first stage at which a nogo decision is made (and analogous for go):
-        # Add extra column of 1's so that there is always some maximum even if NOGO boundary is never crossed:
-        nogo.trial.binary.plus <- cbind(nogo.trial.binary, 1)
-        # Add extra column of 1's so that there is always some maximum even if GO boundary is never crossed:
-        go.trial.binary.plus <- cbind(go.trial.binary, 1)
-        first.nogo.stage <- Rfast::rowMaxs(nogo.trial.binary.plus, value=FALSE) # Rfast
-        first.go.stage <- Rfast::rowMaxs(go.trial.binary.plus, value=FALSE) # Rfast
-        first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
-        mode(first.stop.stage) <- "numeric"
-        # Does the trial make a nogo or a go decision first?
-        # Final decision: 1=nogo, 2=go
-        final.decision <- Rfast::rowMins(first.stop.stage, value=FALSE) # value=FALSE returns indices
-        prob.reject <- sum(final.decision==2)/nsims
-        minimise.prob <- abs(prob.reject - alpha)^2 # 29th Jul: added square.
-        stop.stage <- Rfast::rowMins(first.stop.stage, value=TRUE) #Rfast
-        expd.no.stages <- sum(stop.stage)/nsims
-      } # end of if J==1 else
-      if(prob.only==TRUE){
-        return(minimise.prob)
-      } else{
-        if(composite==FALSE & J!=1){
-          go.decision.index <- which(final.decision==2)
-          correct.go <- rep(NA, length(go.decision.index))
-          incorrect.go <- rep(NA, length(go.decision.index))
-          for(i in 1:length(go.decision.index)){
-            correct.go[i] <- first.m.outs.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
-            incorrect.go[i] <- other.combn.exceed.e[go.decision.index[i], stop.stage[go.decision.index[i]]]
-          }
-          prob.correct.go <- sum(correct.go)/nsims
-          prob.incorrect.go <- sum(incorrect.go)/nsims
-        }else{
-          prob.correct.go <- NA
-          prob.incorrect.go <- NA
-        }
-        return(list(prob.reject=prob.reject,
-                    expd.no.stages=expd.no.stages,
-                    f.vec=f.vec,
-                    e.vec=e.vec,
-                    prob.correct.go=prob.correct.go,
-                    prob.incorrect.go=prob.incorrect.go)
-        )
-      }
-    } # end of function
-
-    trueReject <- function(
-      J=J,
-      K=K,
-      m=m,
-      ts=ts,
-      nsims,
-      prob.only=FALSE,
-      alpha=alpha,
-      means.true=means.true,
-      vars.true=vars.true,
-      f.vec=pwr.ess$f.vec,
-      e.vec=pwr.ess$e.vec,
-      n.final=n.final,
-      composite=FALSE
-    ){
-      # Need test statistic for true effects:
-      means.true <- rep(means.true, times=J)
-      # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
-      denom <-  rep(vars.true, times=J)
-      numer <- rep((1:J)*n.final, each=K)
-      information <- numer/denom
-      tau.true <- means.true*sqrt(information)
-      ts.true <- sweep(ts, 2, tau.true, "+")   # Add the above tau vector to every row in the matrix ts
-      if(J==1){
-        if(composite==FALSE) {
-          go <- t(apply(ts.true, 1, function(x) x > e.vec))
-          go.overall <- apply(go, 1, function(x) sum(x)>=m)
-        } else{
-          ts.composite <- rowSums(ts.true)
-          go.overall <- ts.composite > e.vec
-        }
-        prob.reject <- sum(go.overall)/nsims
-        ess <- n.final
-      } else {
-        if(composite==FALSE){
-          nogo <- t(apply(ts.true, 1, function(x) x < f.vec))
-          go <- t(apply(ts.true, 1, function(x) x > e.vec))
-          nogo.overall <- vector("list", J)
-          go.overall <- vector("list", J)
-          for(j in 1:J){
-            # Subset to the K outcomes for stage j:
-            current.stage.nogo <- nogo[, (1+(j-1)*K):(j*K)]
-            current.stage.go <- go[, (1+(j-1)*K):(j*K)]
-            # Would the trial stop for either go or nogo at stage j?
-            nogo.overall[[j]] <- apply(current.stage.nogo, 1, function(x) sum(x)>=(K-m+1))
-            go.overall[[j]] <- apply(current.stage.go, 1, function(x) sum(x)>=m)
-          }
-          # Is a boundary crossed? Row=simulation, col=stage
-          nogo.trial.binary <- t(do.call(rbind, nogo.overall))
-          go.trial.binary <- t(do.call(rbind, go.overall))
-        } else {
-          # Sum the test statistics at each stage to form the composite test statistics
-          ts.composite <- matrix(NA, nrow=nsims, ncol=J)
-          for(i in 1:J){
-            ts.composite[,i] <- rowSums(ts.true[,(1+(i-1)*K):(i*K)])
-          }
-          nogo.trial.binary <- t(apply(ts.composite, 1, function(x) x < f.vec)) + 0
-          go.trial.binary <- t(apply(ts.composite, 1, function(x) x > e.vec)) + 0
-        }
-        # The first stage at which a nogo decision is made (and analogous for go):
-        first.nogo.stage <- apply(nogo.trial.binary, 1, function(x) min(which(x==1), Inf))
-        first.go.stage <- apply(go.trial.binary, 1, function(x) min(which(x==1), Inf))
-        first.stop.stage <- cbind(first.nogo.stage, first.go.stage)
-        # Does the trial make a nogo or a go decision first?
-        # Final decision: 1=nogo, 2=go
-        final.decision <- apply(first.stop.stage, 1, which.min)
-        prob.reject <- sum(final.decision==2)/nsims
-        stop.stage <- apply(first.stop.stage, 1, min)
-        expd.no.stages <- sum(stop.stage)/nsims
-        ess <- expd.no.stages*n.final
-        #minimise.prob <- abs(prob.reject - alpha)
-      } # end of J==1 else
-      return(c(prob.reject, ess))
-    } # end of function
-
-    constToBounds <- function(const, J., wang.d){
-      e.vec <- const*((1:J.)/J.)^(wang.d-0.5)
-      f.vec <- -e.vec
-      f.vec[length(f.vec)] <-e.vec[length(e.vec)]
-      bounds <- list(e=e.vec, f=f.vec)
-      return(bounds)
-    }
-
-    createTrueTS <- function(ts., mu., vars., J., K., n., composite=FALSE){
-      mu.full.vec <- rep(mu., times=J.)
-      # Need to multiply each outcome's true trt effect by sqrt(j*n/vars), where vars is the variance of outcome K. Vector should end up having length J*K
-      denom <-  rep(vars., times=J.)
-      numer <- rep((1:J.)*n., each=K.)
-      info <- numer/denom
-      tau <- mu.full.vec*sqrt(info)
-      ts.true <- sweep(ts., 2, tau, "+")   # Add the above tau vector to every row in the matrix ts
-      if(composite){
-        ts.composite <- matrix(NA, nrow=nrow(ts.), ncol=J.)
-        for(i in 1:J.){ ts.composite[,i] <- rowSums(ts.true[, (1+(i-1)*K.):(i*K.)])
-        }
-        return(ts.composite)
-      }
-      return(ts.true)
-    }
 
     ############### Covariance matrix ######################
     # stage.row <- matrix(rep(1:J, each=K), J*K, J*K)
