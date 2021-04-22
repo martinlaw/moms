@@ -1004,8 +1004,12 @@ findDTL <- function(K,
   ess.h1 <- ess.h1.dtl
   enm.pp.h0 <- t1.final.n$enm.pp
   enm.pp.h1 <- final.pwr$enm.pp
-  enm.tot.h0 <- enm.pp.h0*final.n.stage # Total ENM is (ENM per person)*(n per stage) for DtL.
-  enm.tot.h1 <- enm.pp.h1*final.n.stage
+  # enm.tot.h0 <- enm.pp.h0*c(final.n.stage, n.single.stage) # Total ENM is (ENM per person)*(n per stage) for DtL, and K*N for single stage.
+  # enm.tot.h1 <- enm.pp.h1*c(final.n.stage, n.single.stage)
+  # ^ The two lines above are *wrong*. As such, the ENM results in the thesis and submitted paper are also wrong.
+  # The total ENM should be (ENM per person)*N for DtL, i.e. *double* what is above.
+  enm.tot.h0 <- enm.pp.h0*c(2*final.n.stage, n.single.stage)
+  enm.tot.h1 <- enm.pp.h1*c(2*final.n.stage, n.single.stage)
 
   #colnames(final.bounds) <- paste("r.k", 1:K, sep="") # Only needed when bounds differ
   final.n.vec <- final.n.stage
