@@ -1507,7 +1507,7 @@ makeOutcomeCoords <- function(...){
   y.list <- list(...)
   lengths <- sapply(y.list, length)
   x.list <- lapply(y.list, function(x) 1:length(x))
-  outcome <- factor(rep(1:length(y.list), times=lengths))
+  outcome <- factor(rep(LETTERS[1:length(y.list)], times=lengths))
   line.df <- data.frame(x.line=unlist(x.list),
                         y.line=y.vec,
                         Outcome=outcome)
@@ -1544,11 +1544,14 @@ createWTplottingBounds <- function(C, J, delta, ymin, ymax){
                           label=label)
   bounds.only.y <- unlist(wang)
   bounds.only.x <- rep(1:J, times=2)
-  bounds.labels <- as.character(round(bounds.only.y,2))
+  bounds.labels.numbers <- as.character(round(bounds.only.y,2))
   bounds.df <- data.frame(x.coords=bounds.only.x,
                           y.coords=bounds.only.y,
-                          labels.rounded=bounds.labels,
+                          labels.rounded=bounds.labels.numbers,
                           stringsAsFactors = FALSE)
+  bounds.df$letters <- paste(rep(c("f[", "e["), each=J), bounds.only.x, "]", sep="")
+  bounds.df$letters[c(J, 2*J)] <- paste("f[", J, "]==e[", J, "]", sep="")
+  #bounds.df$bounds.labels.letters <-
   output.lists <- list(polygon.df=polygon.df,
                        bounds.df=bounds.df)
   output.lists
@@ -1604,6 +1607,56 @@ plotBounds <- function(find.des.output,
   }
   bounds.plot
 }
+
+
+
+plotExample <- function(C=2,
+                        J=4,
+                        delta=0,
+                        xlabel="Stage",
+                        ylabel="Test Statistic",
+                        title.main=NULL,
+                        line.df=NULL,
+                        ymin=-5,
+                        ymax=5,
+                        makeOutcomeCoords.output=NULL){
+  WT.plotting.bounds <- createWTplottingBounds(C=C,
+                                               J=J,
+                                               delta=delta,
+                                               ymin=ymin,
+                                               ymax=ymax)
+  bounds.plot <- ggplot2::ggplot()+
+    geom_blank()+
+    geom_polygon(data=WT.plotting.bounds$polygon.df,
+                 mapping=aes(x=x.coords, y=y.coords, fill=label),
+                 alpha=0.2)+
+    geom_point(data=WT.plotting.bounds$bounds.df,
+               mapping = aes(x=x.coords, y=y.coords))+
+    geom_text(data=WT.plotting.bounds$bounds.df, aes(x=x.coords, y=y.coords, label=letters),
+              hjust=1.25,
+              vjust=1.25,
+              parse=TRUE)+
+    ylab(ylabel)+
+    scale_x_continuous(name=xlabel,
+                       breaks=sort(unique(WT.plotting.bounds$polygon.df$x.coords)),
+                       labels=waiver())+
+    guides(fill=FALSE)
+  if(!is.null(makeOutcomeCoords.output)){
+    bounds.plot <- bounds.plot+
+      geom_line(data=makeOutcomeCoords.output,
+                mapping=aes(x=x.line, y=y.line, col=Outcome),
+                size=1)+
+      geom_point(data=makeOutcomeCoords.output,
+                 mapping=aes(x=x.line, y=y.line, col=Outcome),
+                 size=3)
+  }
+  if(!is.null(title.main)){
+    bounds.plot <- bounds.plot+
+      labs(title = title.main)
+  }
+  bounds.plot
+}
+
 
 # Plot rejection coordinates: ####
 # (comparing MO and composite approaches)
