@@ -736,7 +736,7 @@
                       corr.mat=NULL,
                       vars=NULL,
                       corr.scalar=NULL,
-                      nsims=default.nsims,
+                      nsims=1e5,
                       wang.delta=0,
                       alpha=default.alpha,
                       power=default.power,
@@ -1046,9 +1046,11 @@
     #design.results <- as.data.frame(design.results)
     design.results$p.correct.go <- c(pwr.ess$prob.correct.go)
     design.results$p.incorrect.go <- c(pwr.ess$prob.incorrect.go)
+    boundaries <- findWangTsiatisBounds(C=bounds.const, delta=wang.delta, J=J)
     to.return <- list(input=des.chars,
                       input.cor=corr.mat,
-                      results=design.results)
+                      results=design.results,
+                      boundaries=boundaries)
     if(!is.null(delta.true)){
       to.return$true.results <- true.results
     }
