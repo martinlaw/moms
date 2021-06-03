@@ -1563,7 +1563,7 @@ plotBounds <- function(find.des.output,
                mapping = aes(x=x.coords, y=y.coords))+
     geom_text(data=WT.plotting.bounds$bounds.df, aes(x=x.coords, y=y.coords, label=labels.rounded),
               hjust=0.5,
-              vjust=1.25)+
+              vjust=1.5)+
     ylab(ylabel)+
     scale_x_continuous(name=xlabel,
                        breaks=sort(unique(WT.plotting.bounds$polygon.df$x.coords)),
