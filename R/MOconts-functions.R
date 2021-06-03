@@ -756,14 +756,7 @@
       warning("No uninteresting treatment effects delta0 supplied. Using delta0=0, for all outcomes.", call. = FALSE)
       delta0 <- rep(0, K)
     }
-    # if(is.null(rho.vec)){
-    #   warning("No correlations supplied. Using rho=0.5 for all correlations.", call. = FALSE)
-    #   rho.vec <- rep(0.5, times=sum(1:(K-1)))
-    # }
-    # if(length(rho.vec)==1 & K>2){
-    #   warning("Single value supplied for correlations supplied. Using this value for all correlations.", call. = FALSE)
-    #   rho.vec <- rep(rho.vec, times=sum(1:(K-1)))
-    # }
+
     if(is.null(corr.scalar) & is.null(corr.mat)){
       stop("Supply either correlation matrix (corr.mat) with 1's on the diagonal, or a single shared value for correlation (corr.scalar).")
     }
@@ -851,7 +844,6 @@
     }
 
     # Checks:
-    #if(length(rho.vec)!=sum(1:(K-1))) stop("Number of rho values, i.e. length of rho.vec, should be equal to sum(1:(K-1)) ", call. = FALSE)
     if(length(delta0)!=K & !is.null(delta0)) stop ("Number of supplied uninteresting treatment effects, i.e. delta0, should be equal to K, the number of outcomes",
                                                    call. = FALSE)
     if(length(delta1)!=K) stop ("Number of supplied treatment effects, i.e. delta1, should be equal to K, the number of outcomes", call. = FALSE)
@@ -859,20 +851,6 @@
 
 
     ############### Covariance matrix ######################
-    # stage.row <- matrix(rep(1:J, each=K), J*K, J*K)
-    # stage.col <- t(stage.row)
-    # Lambda <- sqrt(pmin(stage.row, stage.col)/pmax(stage.row, stage.col))
-    # rho_submatrix <- matrix(1, K, K)
-    # rho_submatrix[which(lower.tri(rho_submatrix))] <- rho.vec
-    # rho_submatrix <- t(rho_submatrix)
-    # rho_submatrix[which(lower.tri(rho_submatrix))] <- rho.vec
-    # rho_matrix <- matrix(NA, J*K, J*K)
-    # for(j1 in 1:J){
-    #   for(j2 in 1:J){
-    #     rho_matrix[(1+(j1-1)*K):(j1*K), (1+(j2-1)*K):(j2*K)] <- rho_submatrix
-    #   }
-    # }
-    # Lambda <- Lambda*rho_matrix
     Lambda <- createCovMat(J.=J, K.=K, corr.mat=corr.mat)
 
     # The means for the K test statistics at stage 1, 2, ..., J.
@@ -1282,11 +1260,8 @@
                                           K=K,
                                           delta0=current.delta0,
                                           delta1=current.delta1,
-                                          vars=rep(1, K),
-                                          rho.vec =  rep(0.5, times=sum(1:(K-1))),
+                                          vars=vars,
                                           vars.true = NULL,
-                                          nsims,
-                                          wang.delta,
                                           working.outs = 1:m
                                           )
     }
