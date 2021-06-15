@@ -290,7 +290,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
   b <- length(n.all)
   d <- which(n.all==n.init)
   while(b-a>1){
-    r.k <- bobyqa(par=c(2),
+    r.k <- minqa::bobyqa(par=c(2),
                   fn = findR,
                   lower=0.01,
                   upper=10,
@@ -340,7 +340,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
   } # end of while
   final.n.stage <- n.all[d]
   print(paste("Final n per stage: ", final.n.stage), q=F)
-  final.r.k <- bobyqa(par=c(2),
+  final.r.k <- minqa::bobyqa(par=c(2),
                                fn = findR,
                                lower=0.01,
                                upper=10,
@@ -421,7 +421,7 @@ findCPloserDesSubmission <- function(nsims=default.nsims.dtl,
 
   #####  Find optimal single-stage design
   # (i.e. find boundary and sample size that gives correct type I error and power
-  r.k.single.stage <- bobyqa(par=2,
+  r.k.single.stage <- minqa::bobyqa(par=2,
                              fn=p.reject.single.stage,
                              lower=0.01,
                              upper=10,
@@ -716,6 +716,8 @@ p.reject.single.stage <- function(bounds,
 #' m1[lower.tri(m1, diag=F)] <- vec
 #' diag(m1) <- 1
 #' findDTL(nsims = 1e3, K=4, Kmax=3, m=2, vars = c(1, 1.01, 2, 1.5), delta0 = 0.1, delta1 = 0.4, alpha.k = 0.05, cp.l = 0.3, cp.u = 0.95, n.min = 10, n.max = 40, power = 0.8, corr.mat = m1, working.outs=c(1,2))
+#' @import minqa
+#' @import Rfast
 #' @export
 findDTL <- function(K,
                     Kmax,
@@ -842,7 +844,7 @@ findDTL <- function(K,
   b <- length(n.all)
   d <- which(n.all==n.init)
   while(b-a>1){
-    r.k <- bobyqa(par=c(2),
+    r.k <- minqa::bobyqa(par=c(2),
                   fn = findR,
                   lower=0.01,
                   upper=10,
@@ -892,7 +894,7 @@ findDTL <- function(K,
   } # end of while
   final.n.stage <- n.all[d]
   print(paste("Final n per stage: ", final.n.stage), q=F)
-  final.r.k <- bobyqa(par=c(2),
+  final.r.k <- minqa::bobyqa(par=c(2),
                       fn = findR,
                       lower=0.01,
                       upper=10,
@@ -1004,12 +1006,8 @@ findDTL <- function(K,
   ess.h1 <- ess.h1.dtl
   enm.pp.h0 <- t1.final.n$enm.pp
   enm.pp.h1 <- final.pwr$enm.pp
-  # enm.tot.h0 <- enm.pp.h0*c(final.n.stage, n.single.stage) # Total ENM is (ENM per person)*(n per stage) for DtL, and K*N for single stage.
-  # enm.tot.h1 <- enm.pp.h1*c(final.n.stage, n.single.stage)
-  # ^ The two lines above are *wrong*. As such, the ENM results in the thesis and submitted paper are also wrong.
-  # The total ENM should be (ENM per person)*N for DtL, i.e. *double* what is above.
-  enm.tot.h0 <- enm.pp.h0*c(2*final.n.stage, n.single.stage)
-  enm.tot.h1 <- enm.pp.h1*c(2*final.n.stage, n.single.stage)
+  enm.tot.h0 <- enm.pp.h0*c(final.n.stage) # Total ENM is (ENM per person)*(n per stage) for DtL, and K*N for single stage.
+  enm.tot.h1 <- enm.pp.h1*c(final.n.stage)
 
   #colnames(final.bounds) <- paste("r.k", 1:K, sep="") # Only needed when bounds differ
   final.n.vec <- final.n.stage
